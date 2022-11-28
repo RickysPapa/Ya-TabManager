@@ -1,0 +1,119 @@
+@import "iconfont";
+
+body{
+  background-color: #212121;
+}
+*{
+  padding: 0;
+  margin: 0;
+}
+div{
+  box-sizing: border-box;
+}
+ul{
+  padding: 0;
+  list-style: none;
+}
+.favicon{
+  width: 18px;
+  height: 18px;
+}
+.favicon-1{
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  border: 0.5px solid white;
+  background: #333333;
+}
+.row{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.flex-1{
+  flex: 1;
+}
+
+.btn{
+  color: white;
+  border: 1px solid white;
+}
+.popup{
+  width: 800px;
+  height: 600px;
+  overflow: hidden;
+
+  color: #ddd;
+  //background-color: #212121;
+  font-size: 14px;
+
+  .main{
+    display: flex;
+    height: 100%;
+    .group-by{
+      display: flex;
+      flex-direction: row;
+      .item{
+        border: 1px solid white;
+        border-radius: 6px;
+        margin-right: 6px;
+        min-width: 44px;
+        height: 28px;
+        justify-content: space-between;
+        font-weight: bold;
+        padding: 0 6px;
+        .favicons{
+          //height: 18px;
+        }
+        .favicon-{
+
+        }
+      }
+    }
+  }
+  .window-list{
+    width: 100px;
+  }
+  .window-item{
+    background-color: #333;
+    line-height: 22px;
+  }
+  .main-right{
+    width: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .tab-list{
+    height: 400px;
+    overflow-y: scroll;
+  }
+  .tab-item{
+    display: flex;
+    line-height: 24px;
+    align-items: center;
+    flex-direction: row;
+    .tab-checkbox{
+      margin-right: 4px;
+      &.icon-yigouxuan{
+        font-weight: bold;
+      }
+    }
+    &:hover{
+      color: #fff;
+    }
+    .tab-favicon{
+      width: 18px;
+      height: 18px;
+      margin-right: 4px;
+    }
+    .tab-title{
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      width: 100%;
+    }
+  }
+}
