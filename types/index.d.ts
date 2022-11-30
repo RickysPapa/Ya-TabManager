@@ -1,9 +1,19 @@
+interface Session {
+
+}
+
 interface ManagerState{
-  tabs: [];
-  windows: chrome.windows.Window[];
-  curTabs: chrome.tabs.Tab[],
-  curWindowId: number;
+  windowList: chrome.windows.Window[];
+  savedSessionList: any[];
+  readLaterList: any[],
+
+  curSessionTabs: chrome.tabs.Tab[];  // all tabs in current session
+  curShownTabs: chrome.tabs.Tab[]; // tabs shown in current List
+  curSessionType: 'session' | 'window' | 'readLater'
+  curSessionId: number; // id associated with `curSessionType`
+
   tabSelected: number[];
   domainList: any[];
-  [key: string]: any;
+  curDomainIndex: number;
+  // [key: string]: any;
 }
