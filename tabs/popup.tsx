@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import {useSetState, useToggle} from 'ahooks';
+import {useSetState, useToggle, useMap, useSelections} from 'ahooks';
 import {Modal, Form, Input } from 'antd';
 import {useBaseIdAndTimeStamp} from './utils';
 import dayjs from 'dayjs';
@@ -8,7 +8,7 @@ import './popup.less';
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
   window: 'windowList',
-  readLater: 'readLaterLst'
+  readLater: 'readLaterList'
 }
 
 const IndexPopup = () => {
@@ -20,106 +20,36 @@ const IndexPopup = () => {
     // For current data
     curSessionType: 'window',
     curSessionId: 0,
-    curSessionTabs: [],
-    curShownTabs: [],
+    shouldGroupByDomain: false,
+    // curSessionTabs: [],
+    // curShownTabs: [],
     // For User-Action
-    tabSelected: [],
-    domainList: null,
-    curDomainIndex: 0,
+    // tabSelected: [],
+    // domainList: null,
+    curDomain: '',
   });
 
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
+  const [removedMap, removedMapApi] = useMap([]);
+  const [openedUrlMap, openedTabMapApi] = useMap([]);
 
+  const curSessionTabs  = useMemo(() => {
+    const _curSessionTabs = state[SESSION_TYPE_LIST[state.curSessionType]]?.find(_ => _.id === state.curSessionId)?.tabs || []
+    return _curSessionTabs.filter(_ => !removedMapApi.get(_.id));
+  }, [state.curSessionType, state.curSessionId, removedMap])
 
   useEffect(() => {
-    chrome.storage.local.get('sessions', (res) => {
-      console.log('sessions', res);
-      setState({savedSessionList: res.sessions || []})
-    })
+    resetGroupByDomain();
+    TabSelect.unSelectAll();
+  }, [state.curSessionType, state.curSessionId])
 
-    chrome.windows.getAll({populate: true}).then(res => {
-      setState({
-        windowList: res,
-        curSessionId: res[0].id
-      });
-      console.log(res);
-    })
-
-    chrome.sessions.getRecentlyClosed((res) => {
-      console.log('getRecentlyClosed', res);
-    })
-  }, [])
-
-  const closeTabs = async () => {
-    await chrome.tabs.remove(state.tabSelected);
-  }
-
-  const readLater = async () => {
-    const _tabSelected = state.curShownTabs.filter(_ => state.tabSelected.includes(_.id))
-    const _list = await chrome.storage.local.get('readLater') || [];
-    const readLater = _list.concat(_tabSelected.map(_ => ({
-      icon: _.favIconUrl,
-      title: _.title,
-      url: _.url,
-      ts: Date.now()
-    })))
-    await chrome.storage.local.set({
-      readLater: readLater
-    });
-  }
-
-  const saveToSession = async ({id, name}) => {
-    const _tabSelected = state.curShownTabs.filter(_ => state.tabSelected.includes(_.id))
-    let _list = (await chrome.storage.local.get('sessions'))?.sessions || [];
-    // TODO this will be messed if data synced via multi devices
-    const {tsId, ts} = useBaseIdAndTimeStamp();
-    const _tabs = _tabSelected.map((_, _index) => ({
-      id: `${tsId}-${_index}`,
-      icon: _.favIconUrl,
-      title: _.title,
-      url: _.url,
-      ts
-    }));
-
-    if(id){
-      _list = _list.map((_session) => {
-        if(_session.id === id){
-          _session.tabs = _tabs.concat(_session.tabs);
-          return _session;
-        }
-        return _session;
-      })
-    }else{
-      _list = _list.concat({
-        id: tsId,
-        name: name || `Untitled${日期}`,
-        tabs: _tabs,
-      })
+  const domainList = useMemo(() => {
+    if(!state.shouldGroupByDomain){
+      return [];
     }
 
-    await chrome.storage.local.set({
-      sessions:
-    });
-  }
-
-  const lookLocalStorage = async () => {
-    const res = await chrome.storage.local.get()
-    console.log('lookLocalStorage >>', res);
-    const res1 = await chrome.storage.local.getBytesInUse()
-    console.log('lookLocalStorage >>', res1);
-  }
-
-
-  const resetGroupByDomain = () => {
-    setState({
-      domainList: null,
-      curDomainIndex: 0,
-    })
-  }
-
-  const groupByDomain = () => {
-    const tabsGroupByDomain: {[key: string]: any[]} = state.curSessionTabs.reduce((acc, cur) => {
+    const tabsGroupByDomain: {[key: string]: any[]} = curSessionTabs.reduce((acc, cur) => {
       const _url = new URL(cur.url);
       if(!acc[_url.hostname]){
         acc[_url.hostname] = [];
@@ -128,7 +58,7 @@ const IndexPopup = () => {
       return acc;
     }, {})
 
-    let domainList = Object.entries(tabsGroupByDomain)
+    let _domainList = Object.entries(tabsGroupByDomain)
       .sort((a, b) => a[1].length < b[1].length ? -1 : 1)
       .reduce((acc, cur) => {
         if(cur[1].length > 1){
@@ -151,25 +81,156 @@ const IndexPopup = () => {
         }
         return acc;
       }, []);
-    console.log(domainList);
 
-    domainList = domainList.slice(0, 1).concat(domainList.slice(1).reverse());
+    return _domainList.slice(0, 1).concat(_domainList.slice(1).reverse());
+  }, [curSessionTabs, state.shouldGroupByDomain])
 
+  const curDomain = useMemo(() => {
+    return domainList.some(_ => _.domain === state.curDomain) ? state.curDomain : domainList[0]?.domain
+  }, [domainList.length, state.curDomain])
+
+  const { curShownTabs, curShownTabIds } = useMemo(() => {
+    let _curShownTabs = curSessionTabs;
+    if(state.shouldGroupByDomain && domainList){
+      _curShownTabs = domainList?.find(_ => _.domain === curDomain)?.tabs || [];
+    }
+    return {
+      curShownTabs: _curShownTabs,
+      curShownTabIds: _curShownTabs.map(_ => _.id)
+    };
+  }, [curSessionTabs, curDomain])
+
+  console.log('currentState >>', state);
+
+
+  useEffect(() => {
+    chrome.storage.local.get(['sessions', 'readLater'], (res) => {
+      console.log('chrome localData >> ', res);
+      setState({
+        savedSessionList: res.sessions || [],
+        readLaterList: res.readLater || []
+      })
+    })
+
+    chrome.windows.getAll({populate: true}).then(res => {
+      setState({
+        windowList: res,
+        curSessionId: res[0].id
+      });
+      console.log(res);
+    })
+
+    // chrome.sessions.getRecentlyClosed((res) => {
+    //   console.log('getRecentlyClosed', res);
+    // })
+
+    // chrome.tabs.onRemoved.addListener(async (_tabId, _removeInfo) => {
+    //   if(_removeInfo.isWindowClosing === true){
+    //     const _windowList = state.windowList.filter(_ => _removeInfo.windowId !== _.id);
+    //     setState({
+    //       windowList: _windowList,
+    //       curSessionId: _removeInfo.windowId === state.curSessionId ? _windowList?.[0]?.id : state.curSessionId
+    //     })
+    //   }else{
+    //     // TODO 性能很差 建议用 windowId[] 配合 windowMap{} 来实现一个 useDynamicList
+    //     const newWindow = await chrome.windows.get(_removeInfo.windowId, {
+    //       populate: true
+    //     })
+    //     setState(_state => {
+    //       const _windowList = _state.windowList.map(_ => _removeInfo.windowId === _.id ? newWindow : _)
+    //       return {
+    //         windowList: _windowList
+    //       };
+    //     })
+    //   }
+    // })
+  }, [])
+
+  const closeTabs = () => {
+    chrome.tabs.remove(TabSelect.selected);
+    TabSelect.selected.forEach((_) => {
+      removedMapApi.set(_, true)
+    })
+    TabSelect.unSelectAll();
+  }
+
+  const readLater = async () => {
+    const _tabSelected = curShownTabs.filter(_ =>  TabSelect.isSelected(_.id))
+    let _list = state.readLaterList?.[0]?.tabs || [];
+    const {tsId, ts} = useBaseIdAndTimeStamp();
+    // const _readLater = (await chrome.storage.local.get('readLater'))?.readLater || {id: -1, tabs: []};
+    _list = _list.concat(_tabSelected.map(_ => ({
+      id: `${tsId}_${_.id}`,
+      icon: _.favIconUrl,
+      title: _.title,
+      url: _.url,
+      ts: ts
+    })))
+    const readLaterList = [{id: -1, tabs: _list}];
+    await chrome.storage.local.set({readLater: readLaterList});
     setState({
-      domainList,
-      curShownTabs: domainList[state.curDomainIndex]?.tabs
+      readLaterList
     })
   }
 
-  useEffect(() => {
-    const _curShownTabs = state[SESSION_TYPE_LIST[state.curSessionType]].find(_ => (_.id || _.ts) === state.curSessionId)
-    resetGroupByDomain();
-    setState({
-      curSessionTabs: _curShownTabs?.tabs || [],
-      curShownTabs: _curShownTabs?.tabs || []
-    })
-  }, [state.curSessionType, state.curSessionId])
+  const saveToSession = async ({id = '', name = ''} = {}) => {
+    const _tabSelected = curShownTabs.filter(_ => TabSelect.selected.includes(_.id))
+    let _list = (await chrome.storage.local.get('sessions'))?.sessions || [];
+    // TODO this will be messed if data synced via multi devices
+    const {tsId, ts} = useBaseIdAndTimeStamp();
+    const _tabs = _tabSelected.map((_, _index) => ({
+      id: `${tsId}-${_index}`,
+      icon: _.favIconUrl,
+      title: _.title,
+      url: _.url,
+      ts
+    }));
 
+    if(id){
+      _list = _list.map((_session) => {
+        if(_session.id === id){
+          _session.tabs = _tabs.concat(_session.tabs);
+          return _session;
+        }
+        return _session;
+      })
+    }else{
+      _list = _list.concat({
+        id: tsId,
+        name: name || `Untitled ${dayjs().format('YYYY/MM/DD HH:mm')}`,
+        tabs: _tabs,
+        ts
+      })
+    }
+
+    await chrome.storage.local.set({
+      sessions: _list
+    });
+
+    setState({
+      savedSessionList: _list
+    })
+  }
+
+  function deleteSavedTab(sessionType){
+    
+
+  }
+
+  const lookLocalStorage = async () => {
+    const res = await chrome.storage.local.get()
+    console.log('lookLocalStorage >>', res);
+    const res1 = await chrome.storage.local.getBytesInUse()
+    console.log('lookLocalStorage >>', res1);
+  }
+
+  function resetGroupByDomain() {
+    setState({
+      shouldGroupByDomain: false,
+    })
+  }
+
+  const TabSelect = useSelections<number>(curShownTabIds);
 
   return (
     <div className="popup" >
@@ -194,15 +255,15 @@ const IndexPopup = () => {
             </ul>
           </div>
           <div className="section">
-            <p className="title" onClick={() =>{ setState({ curSessionType: 'readLater' }) }} >Read Later</p>
+            <p className="title" onClick={() =>{ setState({ curSessionType: 'readLater', curSessionId: -1 }) }} >Read Later</p>
           </div>
           <div className="section">
             <p className="title">Sessions</p>
             <ul className="session-list">
               {state.savedSessionList.map((session) => {
                 return (
-                  <li key={session.ts} className="item" onClick={() => {
-                    setState({ curSessionType: 'session', curSessionId: session.ts })
+                  <li key={session.id} className="item" onClick={() => {
+                    setState({ curSessionType: 'session', curSessionId: session.id })
                   }}>{session.name}</li>
                 );
               })}
@@ -211,25 +272,32 @@ const IndexPopup = () => {
         </div>
         <div className="main-right">
           <div>
-            <button onClick={groupByDomain} >group by domain</button>
-            {state.tabSelected.length ? (
+            <button onClick={() => {setState({shouldGroupByDomain: true})}} >group by domain</button>
+            {!TabSelect.noneSelected ? (
               <>
                 <button onClick={readLater} >Read Later</button>
-                <button onClick={toggleModelShow} >Save To Session</button>
-                <button onClick={closeTabs} >Close All</button>
+                {state.curSessionType === 'window'? (
+                  <>
+                    <button onClick={toggleModelShow} >Save To Session</button>
+                    <button onClick={closeTabs} >Close</button>
+                  </>
+                ) : (
+                  <button onClick={() => deleteSavedTab(state.curSessionType)} >Delete</button>
+                )}
               </>
             ) : null}
             <button onClick={lookLocalStorage} >Storage Info</button>
           </div>
-          {state.domainList && state.domainList.length ? (
+
+          {domainList && domainList.length ? (
             <div className="group-by">
-              {state.domainList.map((_, i) => {
+              {domainList.map((_, i) => {
                 return (
                   <div
                     className="item row"
                     onClick={() => {
                       setState({
-                        curShownTabs: state.domainList[i].tabs
+                        curDomain: _.domain
                       }) }
                     }>
                     {_.type === 'multi' ? (
@@ -245,29 +313,35 @@ const IndexPopup = () => {
               })}
             </div>
           ) : null}
+
+
+          <div className="pt-6 pb-6">
+            <span
+              className={`mr-6 tab-checkbox iconfont ${TabSelect.allSelected ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
+              onClick={(e) => {
+                TabSelect.toggleAll();
+              }}
+            />
+            <span>{TabSelect.allSelected ? 'Unselect All' : 'Select All '}</span>
+          </div>
+
           <ul className="tab-list">
-            {state.curShownTabs.map((tab) => {
-              return (
+            {curShownTabs.map((tab) => {
+              // 删除的暂时不显示
+              return removedMapApi.get(tab.id) ? null : (
                 <li key={tab.id} className="tab-item" >
                   <span
-                    className={`tab-checkbox iconfont ${state.tabSelected.includes(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
+                    className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
                     onClick={(e) => {
-                      if(state.tabSelected.includes(tab.id)){
-                        setState({
-                          tabSelected: state.tabSelected.filter(_ => _ !== tab.id)
-                        })
-                      }else {
-                        setState({
-                          tabSelected: [...state.tabSelected, tab.id]
-                        })
-                      }
+                      TabSelect.toggle(tab.id);
                     }}
                   />
                   <div className="tab-title" onClick={() => {
                     chrome.tabs.update(tab.id, {active: true})
+                    chrome.windows.update(tab.windowId, {focused: true})
                   }}>
                     <img className="tab-favicon" src={tab.favIconUrl}/>
-                    <p>{tab.title}</p>
+                    <div className="tab-title-text" >{tab.title}</div>
                   </div>
                 </li>
               );
@@ -277,8 +351,10 @@ const IndexPopup = () => {
 
       </div>
       <Modal title="保存到收藏" open={modalShow} onOk={async () => {
-        console.log(JSON.stringify(form.getFieldsValue(true)));
-        // await saveToSession();
+        const _formData = form.getFieldsValue(true);
+        // console.log(JSON.stringify());
+        await saveToSession({name: _formData.name });
+        toggleModelShow();
       }} onCancel={toggleModelShow}>
         <div style={{height: 6}} />
         <Form
