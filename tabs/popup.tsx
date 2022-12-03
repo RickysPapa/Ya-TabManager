@@ -1,14 +1,20 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import {useSetState, useToggle, useMap, useSelections} from 'ahooks';
 import {Modal, Form, Input } from 'antd';
-import {useBaseIdAndTimeStamp} from './utils';
+import {useBaseIdAndTimeStamp} from '~lib/utils';
 import dayjs from 'dayjs';
 import './popup.less';
+import { useSessionList } from "~lib/hooks";
 
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
   window: 'windowList',
   readLater: 'readLaterList'
+}
+
+const STORAGE_KEY = {
+  session: '$session',
+  readLater: '$readLater'
 }
 
 const IndexPopup = () => {
@@ -29,18 +35,35 @@ const IndexPopup = () => {
     curDomain: '',
   });
 
+  console.log('>>>>');
+  const {curSessionType, curSessionId} = state;
+
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
   const [removedMap, removedMapApi] = useMap([]);
   const [openedUrlMap, openedTabMapApi] = useMap([]);
 
+  const $windows = useSessionList();
+  const $sessions = useSessionList({chromeStorageKey: '$session'});
+  const $readLater = useSessionList({chromeStorageKey: '$readLater'});
+
+  console.log('$sessions >>', $sessions);
+  console.log('$windows >>', $windows);
+  console.log('$readLater >>', $readLater);
+
+  const SESSION_LIST = {
+    session: $sessions,
+    window: $windows,
+    readLater: $readLater
+  }
+
   const curSessionTabs  = useMemo(() => {
-    const _curSessionTabs = state[SESSION_TYPE_LIST[state.curSessionType]]?.find(_ => _.id === state.curSessionId)?.tabs || []
+    const _curSessionTabs = SESSION_LIST?.[curSessionType].kv?.[curSessionId]?.tabs || [];
     return _curSessionTabs.filter(_ => !removedMapApi.get(_.id));
   }, [state.curSessionType, state.curSessionId, removedMap])
 
   useEffect(() => {
-    resetGroupByDomain();
+    // resetGroupByDomain();
     TabSelect.unSelectAll();
   }, [state.curSessionType, state.curSessionId])
 
@@ -100,25 +123,31 @@ const IndexPopup = () => {
     };
   }, [curSessionTabs, curDomain])
 
+  const TabSelect = useSelections<number>(curShownTabIds);
+
   console.log('currentState >>', state);
 
 
   useEffect(() => {
-    chrome.storage.local.get(['sessions', 'readLater'], (res) => {
-      console.log('chrome localData >> ', res);
-      setState({
-        savedSessionList: res.sessions || [],
-        readLaterList: res.readLater || []
-      })
-    })
-
     chrome.windows.getAll({populate: true}).then(res => {
+      $windows.reset(res);
       setState({
         windowList: res,
         curSessionId: res[0].id
       });
-      console.log(res);
     })
+
+    chrome.storage.local.get([STORAGE_KEY['session'], STORAGE_KEY['readLater']], (res) => {
+      console.log('chrome localData >> ', res);
+
+      $sessions.reset(res[STORAGE_KEY['session']]);
+      $readLater.reset(res[STORAGE_KEY['readLater']]);
+      // setState({
+      //   savedSessionList: res.sessions || [],
+      //   readLaterList: res.readLater || []
+      // })
+    })
+
 
     // chrome.sessions.getRecentlyClosed((res) => {
     //   console.log('getRecentlyClosed', res);
@@ -173,48 +202,79 @@ const IndexPopup = () => {
     })
   }
 
-  const saveToSession = async ({id = '', name = ''} = {}) => {
+  function getSelectedTabs(mode?: 'save'){
     const _tabSelected = curShownTabs.filter(_ => TabSelect.selected.includes(_.id))
-    let _list = (await chrome.storage.local.get('sessions'))?.sessions || [];
-    // TODO this will be messed if data synced via multi devices
-    const {tsId, ts} = useBaseIdAndTimeStamp();
-    const _tabs = _tabSelected.map((_, _index) => ({
-      id: `${tsId}-${_index}`,
-      icon: _.favIconUrl,
-      title: _.title,
-      url: _.url,
-      ts
-    }));
-
-    if(id){
-      _list = _list.map((_session) => {
-        if(_session.id === id){
-          _session.tabs = _tabs.concat(_session.tabs);
-          return _session;
-        }
-        return _session;
-      })
-    }else{
-      _list = _list.concat({
-        id: tsId,
-        name: name || `Untitled ${dayjs().format('YYYY/MM/DD HH:mm')}`,
-        tabs: _tabs,
+    if(mode === 'save'){
+      // TODO this will be messed if data synced via multi devices
+      const {tsId, ts} = useBaseIdAndTimeStamp();
+      return _tabSelected.map((_, _index) => ({
+        id: `${tsId}-${_index}`,
+        icon: _.favIconUrl,
+        title: _.title,
+        url: _.url,
         ts
-      })
+      }))
     }
-
-    await chrome.storage.local.set({
-      sessions: _list
-    });
-
-    setState({
-      savedSessionList: _list
-    })
+    return _tabSelected;
   }
 
-  function deleteSavedTab(sessionType){
-    
+  const saveToSession = ({id = '', name = ''} = {}) => {
+    const _tabs = getSelectedTabs();
+    if(id){
+      SESSION_LIST["session"].addTabs(id, _tabs);
+    }else{
+      SESSION_LIST["session"].create({tabs: _tabs})
+    }
+    TabSelect.unSelectAll();
+  }
 
+  // function saveToSession(id, _tabs){
+  //   let _list = state.savedSessionList;
+  //   if(id){
+  //     _list = _list.map((_session) => {
+  //       if(_session.id === id){
+  //         _session.tabs = _tabs.concat(_session.tabs);
+  //         return _session;
+  //       }
+  //       return _session;
+  //     })
+  //   }else{
+  //     const {tsId, ts} = useBaseIdAndTimeStamp();
+  //     _list = _list.concat({
+  //       id: tsId,
+  //       // name: name || `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
+  //       name: `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
+  //       tabs: _tabs,
+  //       ts
+  //     })
+  //   }
+  //
+  //   chrome.storage.local.set({
+  //     sessions: _list
+  //   }).then(() => {
+  //     setState({
+  //       savedSessionList: _list
+  //     })
+  //   });
+  // }
+
+  function saveToReadLater(_list) {
+    const readLaterList = [{id: -1, tabs: _list}];
+    chrome.storage.local.set({readLater: readLaterList}).then(() => {
+      setState({
+        readLaterList
+      })
+    });
+  }
+
+
+  function deleteSavedTab(){
+    const remainTabs = curSessionTabs.filter(_ => !TabSelect.isSelected(_.id))
+    if(state.curSessionType === 'readLater'){
+      saveToReadLater(remainTabs);
+    }else{
+
+    }
   }
 
   const lookLocalStorage = async () => {
@@ -230,7 +290,7 @@ const IndexPopup = () => {
     })
   }
 
-  const TabSelect = useSelections<number>(curShownTabIds);
+
 
   return (
     <div className="popup" >
@@ -242,14 +302,15 @@ const IndexPopup = () => {
           <div className="section">
             <p className="title">Windows</p>
             <ul className="list">
-              {state.windowList.map((window) => {
+              {/*{state.windowList.map((window) => {*/}
+              {$windows.list.map((id) => {
                 return (
-                  <li key={window.id} className="window-item" onClick={() => {
+                  <li key={id} className="window-item" onClick={() => {
                     setState({
-                      curSessionId: window.id,
+                      curSessionId: id,
                       curSessionType: 'window',
                     })
-                  }}>{window.id}</li>
+                  }}>{id}</li>
                 );
               })}
             </ul>
@@ -260,11 +321,12 @@ const IndexPopup = () => {
           <div className="section">
             <p className="title">Sessions</p>
             <ul className="session-list">
-              {state.savedSessionList.map((session) => {
+              {/*{state.savedSessionList.map((session) => {*/}
+              {$sessions.list.map((id) => {
                 return (
-                  <li key={session.id} className="item" onClick={() => {
-                    setState({ curSessionType: 'session', curSessionId: session.id })
-                  }}>{session.name}</li>
+                  <li key={id} className="item" onClick={() => {
+                    setState({ curSessionType: 'session', curSessionId: id })
+                  }}>{$sessions.kv[id].name}</li>
                 );
               })}
             </ul>
@@ -282,7 +344,7 @@ const IndexPopup = () => {
                     <button onClick={closeTabs} >Close</button>
                   </>
                 ) : (
-                  <button onClick={() => deleteSavedTab(state.curSessionType)} >Delete</button>
+                  <button onClick={() => deleteSavedTab()} >Delete</button>
                 )}
               </>
             ) : null}
@@ -353,7 +415,7 @@ const IndexPopup = () => {
       <Modal title="保存到收藏" open={modalShow} onOk={async () => {
         const _formData = form.getFieldsValue(true);
         // console.log(JSON.stringify());
-        await saveToSession({name: _formData.name });
+        saveToSession({name: _formData.name });
         toggleModelShow();
       }} onCancel={toggleModelShow}>
         <div style={{height: 6}} />
