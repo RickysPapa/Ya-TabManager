@@ -59,7 +59,7 @@ const IndexPopup = () => {
 
   const curSessionTabs  = useMemo(() => {
     const _curSessionTabs = SESSION_LIST?.[curSessionType].kv?.[curSessionId]?.tabs || [];
-    return _curSessionTabs.filter(_ => !removedMapApi.get(_.id));
+    return (_curSessionTabs as $Tab[]).filter(_ => !removedMapApi.get(_.id));
   }, [state.curSessionType, state.curSessionId, removedMap])
 
   useEffect(() => {
@@ -123,7 +123,7 @@ const IndexPopup = () => {
     };
   }, [curSessionTabs, curDomain])
 
-  const TabSelect = useSelections<number>(curShownTabIds);
+  const TabSelect = useSelections<number | string>(curShownTabIds);
 
   console.log('currentState >>', state);
 
@@ -176,7 +176,7 @@ const IndexPopup = () => {
   }, [])
 
   const closeTabs = () => {
-    chrome.tabs.remove(TabSelect.selected);
+    chrome.tabs.remove(TabSelect.selected as number[]);
     TabSelect.selected.forEach((_) => {
       removedMapApi.set(_, true)
     })
@@ -188,7 +188,7 @@ const IndexPopup = () => {
     let _list = state.readLaterList?.[0]?.tabs || [];
     const {tsId, ts} = useBaseIdAndTimeStamp();
     // const _readLater = (await chrome.storage.local.get('readLater'))?.readLater || {id: -1, tabs: []};
-    _list = _list.concat(_tabSelected.map(_ => ({
+    _list = _list.concat((_tabSelected as $Tabs).map(_ => ({
       id: `${tsId}_${_.id}`,
       icon: _.favIconUrl,
       title: _.title,
@@ -202,18 +202,18 @@ const IndexPopup = () => {
     })
   }
 
-  function getSelectedTabs(mode?: 'save'){
+  function getSelectedTabs(mode?: 'save') {
     const _tabSelected = curShownTabs.filter(_ => TabSelect.selected.includes(_.id))
     if(mode === 'save'){
       // TODO this will be messed if data synced via multi devices
       const {tsId, ts} = useBaseIdAndTimeStamp();
       return _tabSelected.map((_, _index) => ({
         id: `${tsId}-${_index}`,
-        icon: _.favIconUrl,
+        favIconUrl: _.favIconUrl,
         title: _.title,
         url: _.url,
         ts
-      }))
+      }));
     }
     return _tabSelected;
   }
@@ -221,9 +221,9 @@ const IndexPopup = () => {
   const saveToSession = ({id = '', name = ''} = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
-      SESSION_LIST["session"].addTabs(id, _tabs);
+      SESSION_LIST[curSessionType].addTabs(id, (_tabs as SessionTab[]));
     }else{
-      SESSION_LIST["session"].create({tabs: _tabs})
+      SESSION_LIST[curSessionType].create({name, tabs: (_tabs as SessionTab[])})
     }
     TabSelect.unSelectAll();
   }
@@ -267,14 +267,12 @@ const IndexPopup = () => {
     });
   }
 
-
   function deleteSavedTab(){
-    const remainTabs = curSessionTabs.filter(_ => !TabSelect.isSelected(_.id))
-    if(state.curSessionType === 'readLater'){
-      saveToReadLater(remainTabs);
-    }else{
-
-    }
+    SESSION_LIST[curSessionType].removeTabs(curSessionId, TabSelect.selected);
+    TabSelect.selected.forEach((_) => {
+      removedMapApi.set(_, true)
+    })
+    TabSelect.unSelectAll();
   }
 
   const lookLocalStorage = async () => {
@@ -399,8 +397,10 @@ const IndexPopup = () => {
                     }}
                   />
                   <div className="tab-title" onClick={() => {
-                    chrome.tabs.update(tab.id, {active: true})
-                    chrome.windows.update(tab.windowId, {focused: true})
+                    if(curSessionType === 'window'){
+                      chrome.tabs.update((tab as ChromeTab).id, {active: true})
+                      chrome.windows.update((tab as ChromeTab).windowId, {focused: true})
+                    }
                   }}>
                     <img className="tab-favicon" src={tab.favIconUrl}/>
                     <div className="tab-title-text" >{tab.title}</div>

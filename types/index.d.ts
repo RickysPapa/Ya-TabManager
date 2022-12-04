@@ -12,9 +12,43 @@ interface ManagerState{
   curSessionType: 'session' | 'window' | 'readLater'
   curSessionId: number | string; // id associated with `curSessionType`
 
-  // tabSelected: number[];
   shouldGroupByDomain: boolean;
-  // domainList: any[];
   curDomain: string;
   // [key: string]: any;
 }
+
+
+interface SessionTab {
+  id: string;
+  favIconUrl: string;
+  title: string;
+  url: string;
+  ts: number;
+}
+
+interface Session {
+  id: string;
+  ts: number;
+  name: string;
+  tabs: SessionTab[];
+}
+
+interface ChromeWindow extends chrome.windows.Window{
+  name?: string;
+}
+
+interface SessionMap {
+  [key: string | number]: Session
+}
+
+interface WindowMap {
+  [key: string | number]: ChromeWindow
+}
+
+function reset(): void;
+
+type ChromeTab = chrome.tabs.Tab;
+type $id = number | string;
+type $Session = Session | ChromeWindow;
+type $Tab = SessionTab | ChromeTab;
+type $Tabs = SessionTab[] | ChromeTab[];

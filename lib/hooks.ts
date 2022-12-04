@@ -1,50 +1,11 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-// import { useBaseIdAndTimeStamp } from "~tabs/utils";
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import dayjs from "dayjs";
 
-interface SessionTab {
-  id: string;
-  icon: string;
-  title: string;
-  url: string;
-  ts: number;
-}
-
-interface Session {
-  id: string;
-  ts: number;
-  name: string;
-  tabs: SessionTab[];
-}
-
-interface Window extends chrome.windows.Window{
-  name?: string;
-}
-
-
-interface SessionMap {
-  [key: string | number]: Session
-}
-
-interface WindowMap {
-  [key: string | number]: Window
-}
-
-
-
-type $id = number | string;
-type $Session = Session | Window;
-type $Tab = SessionTab | chrome.tabs.Tab;
-// declare type $SessionTab = SessionTab | chrome.tabs.Tab;
-
-
-
 export function useSessionList({chromeStorageKey = null} = {}){
   const [list, setList] = useState<string[]>([]);
-  const [kv, setKv] = useState({});
-  const [isInit, setInit] = useState(false):
-  // const isInit = useRef(false);
+  const [kv, setKv] = useState<WindowMap | SessionMap>({});
+  const [isInit, setInit] = useState(false);
 
   useEffect(() => {
     if(!isInit) return;
@@ -56,62 +17,80 @@ export function useSessionList({chromeStorageKey = null} = {}){
   }, [kv])
 
   function _updateTabs(id, tabs){
-    setKv({
-      ...kv,
+    setKv(Object.assign({}, kv, {
       [id]: {
         ...kv[id],
         tabs
       }
-    });
+    }));
   }
 
   const API = useMemo(() => {
     return {
-      reset(data: $Session[] | {[key: $id]: Session}){
+      reset(data: ChromeWindow[] | SessionMap){
         if(!data) return;
         if(Array.isArray(data)){
           const _list = [];
           const _map = {};
-          data.forEach((_) => {
+          (data as ChromeWindow[]).forEach((_) => {
             _list.push(_.id);
             _map[_.id] = _;
           })
           setKv(_map);
           setList(_list);
         }else{
-          setKv(data);
+          setKv(data as SessionMap);
           const ids =
-            Object.values(data)
+            Object.values(data as SessionMap)
             .sort((a, b) => a.ts > b.ts ? 1 : -1)
             .map(_ => _.id)
           setList(ids);
-          debugger
         }
         setInit(true);
       },
-      updateTabs(id: $id, tabs: $Tab[]){
+      updateTabs(id: $id, tabs: $Tabs){
         _updateTabs(id, tabs);
       },
-      addTabs(id: $id, tabs: $Tab[]){
-        _updateTabs(id, tabs.concat(kv[id]?.tabs || []));
+      /**
+       * Add tabs to Session item
+       * @param id
+       * @param tabs
+       */
+      addTabs(id: $id, tabs: SessionTab[]){
+        _updateTabs(id, tabs.concat((kv[id]?.tabs as SessionTab[]) || []));
+      },
+      /**
+       * Remove tabs from Session item
+       * @param id
+       * @param tabIds
+       */
+      removeTabs(id: $id, tabIds: $id[]){
+        const _tabs = (kv?.[id].tabs as SessionTab[]).filter(_ => !tabIds.includes(_.id));
+        if(_tabs.length){
+          _updateTabs(id, _tabs);
+        }else{
+          this.remove(id);
+        }
       },
       remove(id: string | string[]){
         const ids = Array.isArray(id) ? id : [id];
         setList(list.filter(_ => !ids.includes(_)));
-        // TODO Should update the map?
+        setKv(Object.values(kv).reduce((acc, cur) => {
+          acc[cur.id] = cur;
+          return acc;
+        }, {}));
       },
-      create({name, tabs}: {name?: string, tabs: $Tab}){
+      create({name, tabs}: {name?: string, tabs: SessionTab[]}){
         const {tsId, ts} = useBaseIdAndTimeStamp();
         setList([...list, tsId]);
-        setKv({
-          ...kv,
+        setKv(Object.assign({}, kv, {
           [tsId]: {
             id: tsId,
             name: name || `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
             tabs,
             ts
           }
-        })
+        }));
       }
     }
   }, [kv, list]);
