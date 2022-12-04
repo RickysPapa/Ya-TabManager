@@ -2,28 +2,10 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import dayjs from "dayjs";
 
-export function useSessionList({chromeStorageKey = null} = {}){
+export function useSessionList({chromeStorageKey = null, initialData = null} = {}){
   const [list, setList] = useState<string[]>([]);
   const [kv, setKv] = useState<WindowMap | SessionMap>({});
   const [isInit, setInit] = useState(false);
-
-  useEffect(() => {
-    if(!isInit) return;
-    if(chromeStorageKey){
-      chrome.storage.local.set({[chromeStorageKey]: kv}).catch((e) => {
-        throw e;
-      });
-    }
-  }, [kv])
-
-  function _updateTabs(id, tabs){
-    setKv(Object.assign({}, kv, {
-      [id]: {
-        ...kv[id],
-        tabs
-      }
-    }));
-  }
 
   const API = useMemo(() => {
     return {
@@ -42,8 +24,8 @@ export function useSessionList({chromeStorageKey = null} = {}){
           setKv(data as SessionMap);
           const ids =
             Object.values(data as SessionMap)
-            .sort((a, b) => a.ts > b.ts ? 1 : -1)
-            .map(_ => _.id)
+              .sort((a, b) => a.ts > b.ts ? 1 : -1)
+              .map(_ => _.id)
           setList(ids);
         }
         setInit(true);
@@ -95,6 +77,29 @@ export function useSessionList({chromeStorageKey = null} = {}){
     }
   }, [kv, list]);
 
+  useEffect(() => {
+    if(initialData){
+      API.reset(initialData);
+    }
+  }, [])
+
+  useEffect(() => {
+    if(!isInit) return;
+    if(chromeStorageKey){
+      chrome.storage.local.set({[chromeStorageKey]: kv}).catch((e) => {
+        throw e;
+      });
+    }
+  }, [kv])
+
+  function _updateTabs(id, tabs){
+    setKv(Object.assign({}, kv, {
+      [id]: {
+        ...kv[id],
+        tabs
+      }
+    }));
+  }
 
   return {
     list, kv,

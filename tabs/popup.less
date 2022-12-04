@@ -66,6 +66,11 @@ ul{
     .group-by{
       display: flex;
       flex-direction: row;
+      overflow-x: scroll;
+      &::-webkit-scrollbar{
+        display: none;
+      }
+      -ms-overflow-style: none;
       .item{
         border: 1px solid white;
         border-radius: 6px;

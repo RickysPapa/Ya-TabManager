@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import {useSetState, useToggle, useMap, useSelections} from 'ahooks';
 import {Modal, Form, Input } from 'antd';
 import {useBaseIdAndTimeStamp} from '~lib/utils';
-import dayjs from 'dayjs';
 import './popup.less';
 import { useSessionList } from "~lib/hooks";
 
@@ -35,7 +34,6 @@ const IndexPopup = () => {
     curDomain: '',
   });
 
-  console.log('>>>>');
   const {curSessionType, curSessionId} = state;
 
   const [form] = Form.useForm();
@@ -45,7 +43,9 @@ const IndexPopup = () => {
 
   const $windows = useSessionList();
   const $sessions = useSessionList({chromeStorageKey: '$session'});
-  const $readLater = useSessionList({chromeStorageKey: '$readLater'});
+  const $readLater = useSessionList({chromeStorageKey: '$readLater', initialData: {
+    default: {tabs: []}
+  }});
 
   console.log('$sessions >>', $sessions);
   console.log('$windows >>', $windows);
@@ -63,9 +63,13 @@ const IndexPopup = () => {
   }, [state.curSessionType, state.curSessionId, removedMap])
 
   useEffect(() => {
-    // resetGroupByDomain();
-    TabSelect.unSelectAll();
+    resetGroupByDomain();
   }, [state.curSessionType, state.curSessionId])
+
+  useEffect(() => {
+    TabSelect.unSelectAll();
+  }, [state.curSessionType, state.curSessionId, state.curDomain])
+
 
   const domainList = useMemo(() => {
     if(!state.shouldGroupByDomain){
@@ -183,23 +187,9 @@ const IndexPopup = () => {
     TabSelect.unSelectAll();
   }
 
-  const readLater = async () => {
-    const _tabSelected = curShownTabs.filter(_ =>  TabSelect.isSelected(_.id))
-    let _list = state.readLaterList?.[0]?.tabs || [];
-    const {tsId, ts} = useBaseIdAndTimeStamp();
-    // const _readLater = (await chrome.storage.local.get('readLater'))?.readLater || {id: -1, tabs: []};
-    _list = _list.concat((_tabSelected as $Tabs).map(_ => ({
-      id: `${tsId}_${_.id}`,
-      icon: _.favIconUrl,
-      title: _.title,
-      url: _.url,
-      ts: ts
-    })))
-    const readLaterList = [{id: -1, tabs: _list}];
-    await chrome.storage.local.set({readLater: readLaterList});
-    setState({
-      readLaterList
-    })
+  const saveToReadLater = async () => {
+    const tabs = getSelectedTabs();
+    $readLater.addTabs('default', tabs as SessionTab[]);
   }
 
   function getSelectedTabs(mode?: 'save') {
@@ -221,50 +211,11 @@ const IndexPopup = () => {
   const saveToSession = ({id = '', name = ''} = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
-      SESSION_LIST[curSessionType].addTabs(id, (_tabs as SessionTab[]));
+      SESSION_LIST['session'].addTabs(id, (_tabs as SessionTab[]));
     }else{
-      SESSION_LIST[curSessionType].create({name, tabs: (_tabs as SessionTab[])})
+      SESSION_LIST['session'].create({name, tabs: (_tabs as SessionTab[])})
     }
     TabSelect.unSelectAll();
-  }
-
-  // function saveToSession(id, _tabs){
-  //   let _list = state.savedSessionList;
-  //   if(id){
-  //     _list = _list.map((_session) => {
-  //       if(_session.id === id){
-  //         _session.tabs = _tabs.concat(_session.tabs);
-  //         return _session;
-  //       }
-  //       return _session;
-  //     })
-  //   }else{
-  //     const {tsId, ts} = useBaseIdAndTimeStamp();
-  //     _list = _list.concat({
-  //       id: tsId,
-  //       // name: name || `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
-  //       name: `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
-  //       tabs: _tabs,
-  //       ts
-  //     })
-  //   }
-  //
-  //   chrome.storage.local.set({
-  //     sessions: _list
-  //   }).then(() => {
-  //     setState({
-  //       savedSessionList: _list
-  //     })
-  //   });
-  // }
-
-  function saveToReadLater(_list) {
-    const readLaterList = [{id: -1, tabs: _list}];
-    chrome.storage.local.set({readLater: readLaterList}).then(() => {
-      setState({
-        readLaterList
-      })
-    });
   }
 
   function deleteSavedTab(){
@@ -287,8 +238,6 @@ const IndexPopup = () => {
       shouldGroupByDomain: false,
     })
   }
-
-
 
   return (
     <div className="popup" >
@@ -314,7 +263,7 @@ const IndexPopup = () => {
             </ul>
           </div>
           <div className="section">
-            <p className="title" onClick={() =>{ setState({ curSessionType: 'readLater', curSessionId: -1 }) }} >Read Later</p>
+            <p className="title" onClick={() =>{ setState({ curSessionType: 'readLater', curSessionId: 'default'}) }} >Read Later</p>
           </div>
           <div className="section">
             <p className="title">Sessions</p>
@@ -335,7 +284,9 @@ const IndexPopup = () => {
             <button onClick={() => {setState({shouldGroupByDomain: true})}} >group by domain</button>
             {!TabSelect.noneSelected ? (
               <>
-                <button onClick={readLater} >Read Later</button>
+                {state.curSessionType !== 'readLater' ? (
+                  <button onClick={saveToReadLater} >Read Later</button>
+                ) : null}
                 {state.curSessionType === 'window'? (
                   <>
                     <button onClick={toggleModelShow} >Save To Session</button>
@@ -355,13 +306,14 @@ const IndexPopup = () => {
                 return (
                   <div
                     className="item row"
+                    style={_.type === 'multi' ? { minWidth: _.tabs.length * 9 + 18 }: {}}
                     onClick={() => {
                       setState({
                         curDomain: _.domain
                       }) }
                     }>
                     {_.type === 'multi' ? (
-                      <div className="favicons row">
+                      <div className="favicons row" >
                         {_.tabs.map(d => d.favIconUrl && <div key={d.id} style={{width: 9, height: 18}}><img className="favicon-1 flex-1" src={d.favIconUrl} /></div>)}
                       </div>
                     ) : (
