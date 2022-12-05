@@ -4,6 +4,7 @@ import {Modal, Form, Input } from 'antd';
 import {useBaseIdAndTimeStamp} from '~lib/utils';
 import './popup.less';
 import { useSessionList } from "~lib/hooks";
+import dayjs from "dayjs";
 
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
@@ -192,7 +193,7 @@ const IndexPopup = () => {
     $readLater.addTabs('default', tabs as SessionTab[]);
   }
 
-  function getSelectedTabs(mode?: 'save') {
+  function getSelectedTabs(mode: string = 'save') {
     const _tabSelected = curShownTabs.filter(_ => TabSelect.selected.includes(_.id))
     if(mode === 'save'){
       // TODO this will be messed if data synced via multi devices
@@ -239,10 +240,30 @@ const IndexPopup = () => {
     })
   }
 
+  function exportData(){
+    const _data = {
+      sessions: $sessions.kv,
+      readLater: $readLater.kv
+    };
+
+    const blob = new Blob([JSON.stringify(_data, null, 2)], {
+      type: "application/json",
+    });
+
+    chrome.downloads.download({
+      url: URL.createObjectURL(blob),
+      filename: `ya-tab-manager\ backup.json`
+    }).catch(e => {
+      throw e;
+    });
+  }
+
   return (
     <div className="popup" >
       <div>
-        <p>Tab Manager From Ricky's Love ❤️</p>
+        <span>Tab Manager From Ricky's Love ❤️</span>
+        <button onClick={exportData} >Export</button>
+        <button>Import</button>
       </div>
       <div className="main">
         <div className="main-left" >

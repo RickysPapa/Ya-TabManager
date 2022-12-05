@@ -35,7 +35,8 @@
       "tabs",
       "sessions",
       "history",
-      "storage"
+      "storage",
+      "downloads"
     ]
   }
 }
