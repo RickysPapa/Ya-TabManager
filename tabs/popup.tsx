@@ -9,12 +9,15 @@ import useSelections from 'ahooks/es/useSelections';
 import Modal from 'antd/es/modal';
 import Form from 'antd/es/form';
 import Input from 'antd/es/input';
+import Select from 'antd/es/select';
+import Button from 'antd/es/button';
 import Upload from 'antd/es/upload';
 // import Result from 'antd/es/result';
 import {useBaseIdAndTimeStamp} from '~lib/utils';
 import './popup.less';
 // import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
+import { Tabs } from "antd";
 // import dayjs from "dayjs";
 
 const { Dragger } = Upload;
@@ -208,9 +211,14 @@ const IndexPopup = () => {
     TabSelect.unSelectAll();
   }
 
-  const saveToReadLater = async () => {
+  const saveToReadLater = async (close = false) => {
     const tabs = getSelectedTabs();
     $readLater.addTabs('default', tabs as SessionTab[]);
+    if(close){
+      closeTabs();
+    }else{
+      TabSelect.unSelectAll();
+    }
   }
 
   function getSelectedTabs(mode: string = 'save') {
@@ -229,14 +237,18 @@ const IndexPopup = () => {
     return _tabSelected;
   }
 
-  const saveToSession = ({id = '', name = ''} = {}) => {
+  const saveToSession = ({id = '', name = ''} = {}, { close = false } = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
       SESSION_LIST['session'].addTabs(id, (_tabs as SessionTab[]));
     }else{
       SESSION_LIST['session'].create({name, tabs: (_tabs as SessionTab[])})
     }
-    TabSelect.unSelectAll();
+    if(close){
+      closeTabs();
+    }else{
+      TabSelect.unSelectAll();
+    }
   }
 
   function deleteSavedTab(){
@@ -326,11 +338,15 @@ const IndexPopup = () => {
             {!TabSelect.noneSelected ? (
               <>
                 {state.curSessionType !== 'readLater' ? (
-                  <button onClick={saveToReadLater} >Read Later</button>
+                  <>
+                    <button onClick={() => saveToReadLater()} >Read Later</button>
+                    <button onClick={() => saveToReadLater(true)} >Read Later & Close</button>
+                  </>
                 ) : null}
                 {state.curSessionType === 'window'? (
                   <>
                     <button onClick={toggleModelShow} >Save To Session</button>
+                    <button onClick={toggleModelShow} >Save To Session & Close</button>
                     <button onClick={closeTabs} >Close</button>
                   </>
                 ) : (
@@ -405,12 +421,25 @@ const IndexPopup = () => {
         </div>
 
       </div>
-      <Modal title="保存到收藏" open={modalShow} onOk={async () => {
-        const _formData = form.getFieldsValue(true);
-        // console.log(JSON.stringify());
-        saveToSession({name: _formData.name });
-        toggleModelShow();
-      }} onCancel={toggleModelShow}>
+      <Modal
+        title="保存到收藏"
+        open={modalShow}
+        onCancel={toggleModelShow}
+        footer={[
+          <Button key="save" type="primary" onClick={() => {
+            const _formData = form.getFieldsValue(true);
+            saveToSession(_formData);
+            toggleModelShow();
+          }}>
+            保存
+          </Button>,
+          <Button key="saveAndClose" type="primary" onClick={() => {
+            const _formData = form.getFieldsValue(true);
+            saveToSession(_formData, { close: true });
+            toggleModelShow();
+          }} > 保存并关闭 </Button>,
+        ]}
+      >
         <div style={{height: 6}} />
         <Form
           form={form}
@@ -419,9 +448,32 @@ const IndexPopup = () => {
           onFinish={(values) => {
             console.log('Success:', values);
           }}
+          onValuesChange={(changedValues, allValues) => {
+            console.log(changedValues, allValues);
+          }}
         >
-          <Form.Item label="名称" name="name">
-            <Input placeholder="未命名" />
+          <Form.Item label="选择收藏夹" name="id">
+            <Select
+              placeholder="创建新的收藏夹"
+              defaultValue="new"
+              // style={{ width: 120 }}
+              options={[{label: '新建收藏夹', value: 'new'}].concat($sessions.list.map(_id => ({
+                label: $sessions.kv[_id].name,
+                value: _id
+              })))}
+            />
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+          >
+            {({ getFieldValue }) =>
+              !getFieldValue('id') || getFieldValue('id') === 'new' ? (
+                <Form.Item name="name" label="收藏夹名称">
+                  <Input />
+                </Form.Item>
+              ) : null
+            }
           </Form.Item>
         </Form>
       </Modal>
