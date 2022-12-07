@@ -1,11 +1,23 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import {useSetState, useToggle, useMap, useSelections} from 'ahooks';
-import {Modal, Form, Input } from 'antd';
+// import { useSetState, useToggle, useMap, useSelections } from 'ahooks';
+// import {Modal, Form, Input, Upload } from 'antd';
+
+import useSetState from 'ahooks/es/useSetState';
+import useToggle from 'ahooks/es/useToggle';
+import useMap from 'ahooks/es/useMap';
+import useSelections from 'ahooks/es/useSelections';
+import Modal from 'antd/es/modal';
+import Form from 'antd/es/form';
+import Input from 'antd/es/input';
+import Upload from 'antd/es/upload';
+// import Result from 'antd/es/result';
 import {useBaseIdAndTimeStamp} from '~lib/utils';
 import './popup.less';
+// import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
-import dayjs from "dayjs";
+// import dayjs from "dayjs";
 
+const { Dragger } = Upload;
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
   window: 'windowList',
@@ -35,12 +47,20 @@ const IndexPopup = () => {
     curDomain: '',
   });
 
+
   const {curSessionType, curSessionId} = state;
 
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
   const [removedMap, removedMapApi] = useMap([]);
   const [openedUrlMap, openedTabMapApi] = useMap([]);
+
+  const [uploadState, setUploadState] = useSetState({
+    open: false,
+    success: false
+  })
+  // const [showImport, {toggle: toggleImportModal}] = useToggle(false);
+  // const []
 
   const $windows = useSessionList();
   const $sessions = useSessionList({chromeStorageKey: '$session'});
@@ -263,7 +283,7 @@ const IndexPopup = () => {
       <div>
         <span>Tab Manager From Ricky's Love ❤️</span>
         <button onClick={exportData} >Export</button>
-        <button>Import</button>
+        <button onClick={() => setUploadState({open: true})}>Import</button>
       </div>
       <div className="main">
         <div className="main-left" >
@@ -405,6 +425,40 @@ const IndexPopup = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal
+        title="导入"
+        open={uploadState.open}
+        onCancel={() => setUploadState({open: false})}
+        footer={null}
+      >
+        <div style={{height: 6}} />
+        {uploadState.success ? (
+          <>
+            <p>Successfully Import</p>
+            <p>Now you can check it</p>
+          </>
+        ) : (
+          <Dragger {...{
+            accept: '.json',
+            showUploadList: false,
+            name: 'file',
+            onChange(info) {
+              const { status } = info.file;
+              if (status === 'done') {
+                console.log(info.file, info.fileList);
+                info.file.originFileObj.text().then(res => {
+                  setUploadState({ success: true })
+                  console.log(res);
+                })
+              }
+            },
+          }}>
+            <p className="ant-upload-text">Click or drag file to this area to upload</p>
+          </Dragger>
+        )}
+      </Modal>
+
     </div>
   )
 }

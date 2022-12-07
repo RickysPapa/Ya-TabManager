@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import dayjs from "dayjs";
 
@@ -51,14 +51,16 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
         if(_tabs.length){
           _updateTabs(id, _tabs);
         }else{
-          this.remove(id);
+          this.removeList(id);
         }
       },
-      remove(id: string | string[]){
+      removeList(id: string | string[]){
         const ids = Array.isArray(id) ? id : [id];
         setList(list.filter(_ => !ids.includes(_)));
         setKv(Object.values(kv).reduce((acc, cur) => {
-          acc[cur.id] = cur;
+          if(cur.id !== id){
+            acc[cur.id] = cur;
+          }
           return acc;
         }, {}));
       },
@@ -85,6 +87,7 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
 
   useEffect(() => {
     if(!isInit) return;
+    console.log('save', kv);
     if(chromeStorageKey){
       chrome.storage.local.set({[chromeStorageKey]: kv}).catch((e) => {
         throw e;
