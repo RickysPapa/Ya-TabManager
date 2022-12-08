@@ -326,7 +326,7 @@ const IndexPopup = () => {
                 return (
                   <li key={id} className="item" onClick={() => {
                     setState({ curSessionType: 'session', curSessionId: id })
-                  }}>{$sessions.kv[id].name}</li>
+                  }}>{$sessions.kv[id]?.name || '未命名'}</li>
                 );
               })}
             </ul>
@@ -350,7 +350,11 @@ const IndexPopup = () => {
                     <button onClick={closeTabs} >Close</button>
                   </>
                 ) : (
-                  <button onClick={() => deleteSavedTab()} >Delete</button>
+                  <>
+                    {/*<button onClick={toggleModelShow} >Open</button>*/}
+                    {/*<button onClick={toggleModelShow} >Open In New Window</button>*/}
+                    <button onClick={() => deleteSavedTab()} >Delete</button>
+                  </>
                 )}
               </>
             ) : null}
@@ -455,10 +459,10 @@ const IndexPopup = () => {
           <Form.Item label="选择收藏夹" name="id">
             <Select
               placeholder="创建新的收藏夹"
-              defaultValue="new"
+              defaultValue=""
               // style={{ width: 120 }}
-              options={[{label: '新建收藏夹', value: 'new'}].concat($sessions.list.map(_id => ({
-                label: $sessions.kv[_id].name,
+              options={[{label: '新建收藏夹', value: ''}].concat($sessions.list.map(_id => ({
+                label: $sessions.kv[_id]?.name || '未命名',
                 value: _id
               })))}
             />
@@ -468,7 +472,7 @@ const IndexPopup = () => {
             shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
           >
             {({ getFieldValue }) =>
-              !getFieldValue('id') || getFieldValue('id') === 'new' ? (
+              !getFieldValue('id') ? (
                 <Form.Item name="name" label="收藏夹名称">
                   <Input />
                 </Form.Item>
@@ -500,8 +504,11 @@ const IndexPopup = () => {
               if (status === 'done') {
                 console.log(info.file, info.fileList);
                 info.file.originFileObj.text().then(res => {
+                  const _data = JSON.parse(res);
+                  $sessions.reset(_data.sessions);
+                  $readLater.reset(_data.readLater);
                   setUploadState({ success: true })
-                  console.log(res);
+                  console.log(_data);
                 })
               }
             },
