@@ -91,7 +91,7 @@ const IndexPopup = () => {
   }, [state.curSessionType, state.curSessionId])
 
   useEffect(() => {
-    TabSelect.unSelectAll();
+    TabSelect.setSelected([]);
   }, [state.curSessionType, state.curSessionId, state.curDomain])
 
 
@@ -153,6 +153,7 @@ const IndexPopup = () => {
 
   const TabSelect = useSelections<number | string>(curShownTabIds);
 
+  console.log('TabSelect >>', TabSelect.selected);
   console.log('currentState >>', state);
 
 
@@ -175,6 +176,10 @@ const IndexPopup = () => {
       //   readLaterList: res.readLater || []
       // })
     })
+
+
+
+
 
 
     // chrome.sessions.getRecentlyClosed((res) => {
@@ -290,6 +295,46 @@ const IndexPopup = () => {
     });
   }
 
+  // function openTabs({tabs: SessinonTab[] = [], newWindow: boolean = false} = {}){
+  function openTabs({tabs = null, newWindow = false} = {}) {
+    const _tabs = tabs ? tabs : getSelectedTabs();
+    if(_tabs){
+      if(newWindow){
+        let _targetWindowId = null;
+        function _onUpdated(_tabId, changeInfo, tab){
+          if(changeInfo.title && _targetWindowId && tab.windowId === _targetWindowId && tab.index !== 0){
+            console.log(JSON.stringify(changeInfo));
+            chrome.tabs.discard(_tabId);
+          }
+        }
+        chrome.tabs.onUpdated.addListener(_onUpdated);
+
+        chrome.windows.create({
+          url: _tabs.map(_ => _.url)
+        }).then((_window) => {
+          _targetWindowId = _window.id;
+          setTimeout(() => {
+            chrome.tabs.onUpdated.removeListener(_onUpdated);
+          }, 3000)
+        });
+      }else{
+        _tabs.forEach((_) => {
+          chrome.tabs.create({
+            active: false,
+            url: _.url
+          })
+        })
+      }
+    }
+  }
+
+  function openSession(){
+    openTabs({
+      newWindow: true,
+      tabs: $sessions.kv[state.curSessionId].tabs
+    })
+  }
+
   return (
     <div className="popup" >
       <div>
@@ -351,12 +396,15 @@ const IndexPopup = () => {
                   </>
                 ) : (
                   <>
-                    {/*<button onClick={toggleModelShow} >Open</button>*/}
-                    {/*<button onClick={toggleModelShow} >Open In New Window</button>*/}
+                    <button onClick={() => openTabs()} >Open</button>
+                    <button onClick={() => openTabs({newWindow: true})} >Open In New Window</button>
                     <button onClick={() => deleteSavedTab()} >Delete</button>
                   </>
                 )}
               </>
+            ) : null}
+            {state.curSessionType === 'session' ? (
+              <button onClick={() => openSession()} >Open Session</button>
             ) : null}
             <button onClick={lookLocalStorage} >Storage Info</button>
           </div>
