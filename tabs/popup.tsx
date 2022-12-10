@@ -296,7 +296,7 @@ const IndexPopup = () => {
   }
 
   // function openTabs({tabs: SessinonTab[] = [], newWindow: boolean = false} = {}){
-  function openTabs({tabs = null, newWindow = false} = {}) {
+  function openTabs({tabs = null, newWindow = false, active = false} = {}) {
     const _tabs = tabs ? tabs : getSelectedTabs();
     if(_tabs){
       if(newWindow){
@@ -318,9 +318,10 @@ const IndexPopup = () => {
           }, 3000)
         });
       }else{
+        const isOnlyOne = _tabs.length === 1;
         _tabs.forEach((_) => {
           chrome.tabs.create({
-            active: false,
+            active: isOnlyOne ? active : false,
             url: _.url
           })
         })
@@ -461,10 +462,13 @@ const IndexPopup = () => {
                     if(curSessionType === 'window'){
                       chrome.tabs.update((tab as ChromeTab).id, {active: true})
                       chrome.windows.update((tab as ChromeTab).windowId, {focused: true})
+                    }else{
+                      openTabs({tabs: [tab], active: true});
                     }
                   }}>
                     <img className="tab-favicon" src={tab.favIconUrl}/>
                     <div className="tab-title-text" >{tab.title}</div>
+                    <button></button>
                   </div>
                 </li>
               );
