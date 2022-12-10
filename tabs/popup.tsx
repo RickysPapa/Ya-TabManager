@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import {DeleteOutlined} from '@ant-design/icons';
 // import { useSetState, useToggle, useMap, useSelections } from 'ahooks';
 // import {Modal, Form, Input, Upload } from 'antd';
 
@@ -42,6 +43,7 @@ const IndexPopup = () => {
     curSessionType: 'window',
     curSessionId: 0,
     shouldGroupByDomain: false,
+    showDuplicateTabs: false,
     // curSessionTabs: [],
     // curShownTabs: [],
     // For User-Action
@@ -88,6 +90,9 @@ const IndexPopup = () => {
 
   useEffect(() => {
     resetGroupByDomain();
+    setState({
+      showDuplicateTabs: false
+    })
   }, [state.curSessionType, state.curSessionId])
 
   useEffect(() => {
@@ -96,6 +101,9 @@ const IndexPopup = () => {
 
 
   const domainList = useMemo(() => {
+    // 为什么需要实时计算，而不保存到 state 缓存？
+    // 考虑到有删除操作的时候还要重新计算，逻辑比较麻烦，同时可能导致两次 setState？（存疑）
+    // 后续可以考虑自己写一个 deps，用钩子的方式执行副作用（不过可以先了解一下 react 的 deps 一定是 state 修改完成后才执行，还是拿着将要变的值触发回调的）
     if(!state.shouldGroupByDomain){
       return [];
     }
@@ -136,6 +144,34 @@ const IndexPopup = () => {
     return _domainList.slice(0, 1).concat(_domainList.slice(1).reverse());
   }, [curSessionTabs, state.shouldGroupByDomain])
 
+  const [duplicateList, preferDuplicateIds] = useMemo(() => {
+    if(!state.showDuplicateTabs) return [[], []];
+    const _urlCount = curSessionTabs.reduce((acc, cur) => {
+      if(!acc[cur.url]){
+        acc[cur.url] = [];
+      }
+      acc[cur.url].push(cur);
+      return acc;
+    }, {})
+
+    let _duplicateList = [];
+    let _selectedIds = [];
+    Object.values(_urlCount)
+      .filter(_ => (_ as []).length > 1)
+      .forEach((_tabs: ChromeTab[]) => {
+        _selectedIds.push(...(_tabs.map(_ => _.id).slice(0, -1)));
+        _duplicateList.push(..._tabs);
+      });
+
+    return [_duplicateList, _selectedIds];
+  }, [state.showDuplicateTabs, curSessionType, curSessionId, curSessionTabs]);
+
+  useEffect(() => {
+    if(state.showDuplicateTabs){
+      TabSelect.setSelected(preferDuplicateIds);
+    }
+  }, [state.showDuplicateTabs, preferDuplicateIds])
+
   const curDomain = useMemo(() => {
     return domainList.some(_ => _.domain === state.curDomain) ? state.curDomain : domainList[0]?.domain
   }, [domainList.length, state.curDomain])
@@ -145,11 +181,14 @@ const IndexPopup = () => {
     if(state.shouldGroupByDomain && domainList){
       _curShownTabs = domainList?.find(_ => _.domain === curDomain)?.tabs || [];
     }
+    if(state.showDuplicateTabs){
+      _curShownTabs = duplicateList;
+    }
     return {
       curShownTabs: _curShownTabs,
       curShownTabIds: _curShownTabs.map(_ => _.id)
     };
-  }, [curSessionTabs, curDomain])
+  }, [curSessionTabs, curDomain, state.showDuplicateTabs])
 
   const TabSelect = useSelections<number | string>(curShownTabIds);
 
@@ -256,6 +295,15 @@ const IndexPopup = () => {
     }
   }
 
+  function _getCurSessionInstance(){
+    return SESSION_LIST[curSessionType];
+  }
+
+  // function __getCurSessionTabs(){
+  //   return SESSION_LIST[curSessionType].kv[curSessionId].tabs;
+  // }
+
+
   function deleteSavedTab(){
     SESSION_LIST[curSessionType].removeTabs(curSessionId, TabSelect.selected);
     TabSelect.selected.forEach((_) => {
@@ -336,10 +384,12 @@ const IndexPopup = () => {
     })
   }
 
+
   return (
     <div className="popup" >
       <div>
         <span>Tab Manager From Ricky's Love ❤️</span>
+        <DeleteOutlined />
         <button onClick={exportData} >Export</button>
         <button onClick={() => setUploadState({open: true})}>Import</button>
       </div>
@@ -381,6 +431,7 @@ const IndexPopup = () => {
         <div className="main-right">
           <div>
             <button onClick={() => {setState({shouldGroupByDomain: true})}} >group by domain</button>
+            <button onClick={() => {setState({showDuplicateTabs: true})}} >Delete duplicate tabs</button>
             {!TabSelect.noneSelected ? (
               <>
                 {state.curSessionType !== 'readLater' ? (

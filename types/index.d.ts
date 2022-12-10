@@ -12,6 +12,7 @@ interface ManagerState{
   curSessionType: 'session' | 'window' | 'readLater'
   curSessionId: number | string; // id associated with `curSessionType`
 
+  showDuplicateTabs: boolean;
   shouldGroupByDomain: boolean;
   curDomain: string;
   // [key: string]: any;
