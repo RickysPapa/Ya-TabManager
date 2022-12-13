@@ -14,6 +14,8 @@ interface ManagerState{
 
   showDuplicateTabs: boolean;
   shouldGroupByDomain: boolean;
+  showSearchResult: boolean;
+  searchResult: any[];
   curDomain: string;
   // [key: string]: any;
 }

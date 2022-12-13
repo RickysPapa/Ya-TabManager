@@ -79,19 +79,21 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
     }
   }, [kv, list]);
 
-  useEffect(() => {
-    if(initialData){
-      API.reset(initialData);
-    }
-  }, [])
-
+  // 默认值设置可能会晚于外部 reset 调用，导致数据被覆盖为空，很危险！
+  // useEffect(() => {
+  //   if(initialData){
+  //     API.reset(initialData);
+  //   }
+  // }, [])
+  //
   useEffect(() => {
     if(!isInit) return;
     console.log('save', kv);
     if(chromeStorageKey){
-      chrome.storage.local.set({[chromeStorageKey]: kv}).catch((e) => {
-        throw e;
-      });
+      localStorage.setItem(chromeStorageKey, JSON.stringify(kv));
+      // chrome.storage.local.set({[chromeStorageKey]: kv}).catch((e) => {
+      //   throw e;
+      // });
     }
   }, [kv])
 

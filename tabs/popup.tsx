@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
 import {DeleteOutlined} from '@ant-design/icons';
 // import { useSetState, useToggle, useMap, useSelections } from 'ahooks';
 // import {Modal, Form, Input, Upload } from 'antd';
@@ -7,6 +7,7 @@ import useSetState from 'ahooks/es/useSetState';
 import useToggle from 'ahooks/es/useToggle';
 import useMap from 'ahooks/es/useMap';
 import useSelections from 'ahooks/es/useSelections';
+import useKeyPress from 'ahooks/es/useKeyPress';
 import Modal from 'antd/es/modal';
 import Form from 'antd/es/form';
 import Input from 'antd/es/input';
@@ -18,10 +19,12 @@ import {useBaseIdAndTimeStamp} from '~lib/utils';
 import './popup.less';
 // import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
-import { Tabs } from "antd";
+import { InputRef, Tabs } from "antd";
+import TMSearch from './components/search';
 // import dayjs from "dayjs";
 
 const { Dragger } = Upload;
+const { Search } = Input;
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
   window: 'windowList',
@@ -32,6 +35,8 @@ const STORAGE_KEY = {
   session: '$session',
   readLater: '$readLater'
 }
+
+let inputChinese = false;
 
 const IndexPopup = () => {
   const [state, setState] = useSetState<ManagerState>({
@@ -44,6 +49,8 @@ const IndexPopup = () => {
     curSessionId: 0,
     shouldGroupByDomain: false,
     showDuplicateTabs: false,
+    showSearchResult: false,
+    searchResult: [],
     // curSessionTabs: [],
     // curShownTabs: [],
     // For User-Action
@@ -52,9 +59,7 @@ const IndexPopup = () => {
     curDomain: '',
   });
 
-
   const {curSessionType, curSessionId} = state;
-
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
   const [removedMap, removedMapApi] = useMap([]);
@@ -82,6 +87,19 @@ const IndexPopup = () => {
     window: $windows,
     readLater: $readLater
   }
+
+  const {windowSearchSource, windowSearchSourceData} = useMemo(() => {
+    return Object.values($windows.kv).reduce((acc, cur) => {
+      console.log('windowSearchSource > ', cur.tabs);
+      acc.windowSearchSource = acc.windowSearchSource.concat(cur.tabs.map(_ => _.title + _.url + ''))
+      acc.windowSearchSourceData = acc.windowSearchSourceData.concat(cur.tabs)
+      return acc;
+    }, {
+      windowSearchSource: [],
+      windowSearchSourceData: []
+    })
+  }, [$windows.kv])
+
 
   const curSessionTabs  = useMemo(() => {
     const _curSessionTabs = SESSION_LIST?.[curSessionType].kv?.[curSessionId]?.tabs || [];
@@ -184,11 +202,14 @@ const IndexPopup = () => {
     if(state.showDuplicateTabs){
       _curShownTabs = duplicateList;
     }
+    if(state.showSearchResult){
+      _curShownTabs = state.searchResult;
+    }
     return {
       curShownTabs: _curShownTabs,
       curShownTabIds: _curShownTabs.map(_ => _.id)
     };
-  }, [curSessionTabs, curDomain, state.showDuplicateTabs])
+  }, [curSessionTabs, curDomain, state.showDuplicateTabs, state.searchResult, state.showSearchResult])
 
   const TabSelect = useSelections<number | string>(curShownTabIds);
 
@@ -196,6 +217,7 @@ const IndexPopup = () => {
   console.log('currentState >>', state);
 
 
+  const searchEl = useRef(null);
   useEffect(() => {
     chrome.windows.getAll({populate: true}).then(res => {
       $windows.reset(res);
@@ -205,17 +227,13 @@ const IndexPopup = () => {
       });
     })
 
-    chrome.storage.local.get([STORAGE_KEY['session'], STORAGE_KEY['readLater']], (res) => {
-      console.log('chrome localData >> ', res);
-
-      $sessions.reset(res[STORAGE_KEY['session']]);
-      $readLater.reset(res[STORAGE_KEY['readLater']]);
-      // setState({
-      //   savedSessionList: res.sessions || [],
-      //   readLaterList: res.readLater || []
-      // })
-    })
-
+    try{
+      setTimeout(() => {
+        $sessions.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['session'])));
+        $readLater.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['readLater'])));
+      }, 150)
+    }catch (e){
+    }
 
 
 
@@ -246,6 +264,14 @@ const IndexPopup = () => {
     //   }
     // })
   }, [])
+
+  // useKeyPress(() => true, (e) => {
+  //   console.log(e.key);
+  // }, {
+  //   exactMatch: true,
+  //   // useCapture: true
+  // });
+
 
   const closeTabs = () => {
     chrome.tabs.remove(TabSelect.selected as number[]);
@@ -313,10 +339,10 @@ const IndexPopup = () => {
   }
 
   const lookLocalStorage = async () => {
-    const res = await chrome.storage.local.get()
-    console.log('lookLocalStorage >>', res);
-    const res1 = await chrome.storage.local.getBytesInUse()
-    console.log('lookLocalStorage >>', res1);
+    // const res = await chrome.storage.local.get()
+    // console.log('lookLocalStorage >>', res);
+    // const res1 = await chrome.storage.local.getBytesInUse()
+    // console.log('lookLocalStorage >>', res1);
   }
 
   function resetGroupByDomain() {
@@ -384,14 +410,30 @@ const IndexPopup = () => {
     })
   }
 
-
   return (
     <div className="popup" >
       <div>
         <span>Tab Manager From Ricky's Love ❤️</span>
         <DeleteOutlined />
+        <TMSearch
+          dataSource={windowSearchSourceData}
+          onResult={(res) => {
+            setState({
+              showSearchResult: res !== false,
+              searchResult: res || []
+            })
+          }}
+        />
         <button onClick={exportData} >Export</button>
         <button onClick={() => setUploadState({open: true})}>Import</button>
+        <button onClick={() => {
+          chrome.tabs.create({
+            active: true,
+            pinned: true,
+            index: 1,
+            url: `chrome-extension://${chrome.runtime.id}/tabs/popup.html`
+          })
+        }}>OpenInWindow</button>
       </div>
       <div className="main">
         <div className="main-left" >
@@ -620,7 +662,6 @@ const IndexPopup = () => {
           </Dragger>
         )}
       </Modal>
-
     </div>
   )
 }
