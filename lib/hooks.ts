@@ -23,18 +23,18 @@ function processInitialData(data){
   // }
 }
 
-interface State {
-  sessionList: Session[];
+interface State<T> {
+  sessionList: Session<T>[];
   // kv: WindowMap | SessionMap;
   isInit: boolean;
 }
 
 // TODO 去除 KV 结构，太复杂，先实现功能再考虑性能
-export function useSessionList({chromeStorageKey = null, initialData = null} = {}){
-  const [ state, setState ] = useSetState<State>({ sessionList: initialData || [], isInit: false });
+export function useSessionList<T extends YATab | ChromeTab>({chromeStorageKey = null, initialData = null} = {}){
+  const [ state, setState ] = useSetState<State<T>>({ sessionList: initialData || [], isInit: false });
   const { sessionList, isInit } = state;
 
-  function reset(data: Session[]){
+  function reset(data: Session<T>[]){
     if(data){
       setState({ sessionList: data, isInit: true })
     }
@@ -44,13 +44,14 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
     return sessionList.find(_ => _.id === sid);
   }
 
-  function createSession({name = '', tabs = [], ...other} = {}){
+  function createSession(params: {name: string, tabs: T[]}): void {
+    const {name = '', tabs = [], ...other} = params;
     const {tsId, ts} = useBaseIdAndTimeStamp();
     setState({
       sessionList: [{
         id: tsId,
         name: name || `Untitled ${dayjs(ts).format('YYYY/MM/DD HH:mm')}`,
-        tabs,
+        tabs: tabs,
         ts,
         ...other,
       }, ...sessionList]
@@ -77,7 +78,7 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
     updateSession(id, Object.assign({}, _session, {tabs}));
   }
 
-  function addTabs(sid: $id, tabs: SessionTab[]){
+  function addTabs(sid: $id, tabs: T[]){
     resetTabs(sid, tabs.concat(getTabs(sid) || []));
   }
 
@@ -86,7 +87,7 @@ export function useSessionList({chromeStorageKey = null, initialData = null} = {
     resetTabs(sid, tabs);
   }
 
-  function insertTab(sid: $id, tabIndex: number, tab: SessionTab){
+  function insertTab(sid: $id, tabIndex: number, tab: T){
     const _tabs = getTabs(sid);
     if(_tabs){
       resetTabs(sid, [..._tabs].splice(tabIndex, 0, tab));

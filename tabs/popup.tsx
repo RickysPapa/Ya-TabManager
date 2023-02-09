@@ -25,6 +25,7 @@ import './popup.less';
 // import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
 import TMSearch from './components/search';
+import { simplify } from "~lib/TMTab";
 // import dayjs from "dayjs";
 
 const EE = new EventEmitter()
@@ -87,9 +88,9 @@ const IndexPopup = () => {
   // const []
 
   // const $windows = useSessionList({chromeStorageKey: '$window'});
-  const $windows = useSessionList({initialData: currentWindowWithDetail});
-  const $sessions = useSessionList({chromeStorageKey: '$session'});
-  const $readLater = useSessionList({chromeStorageKey: '$readLater', initialData: [{
+  const $windows = useSessionList<ChromeTab>({initialData: currentWindowWithDetail});
+  const $sessions = useSessionList<YATab>({chromeStorageKey: '$session'});
+  const $readLater = useSessionList<YATab>({chromeStorageKey: '$readLater', initialData: [{
     id: 'default',
     tabs: []
   }]});
@@ -272,7 +273,7 @@ const IndexPopup = () => {
 
     chrome.windows.onCreated.addListener((_w) => {
       console.log('windows.onCreated popup.ts >>', _w);
-      $windowsRef.current.createSession({tabs: [], ..._w});
+      $windowsRef.current.createSession({name: '', tabs: [], ..._w});
     })
 
     try{
@@ -309,7 +310,7 @@ const IndexPopup = () => {
 
   const saveToReadLater = async (close = false) => {
     const tabs = getSelectedTabs();
-    $readLater.addTabs('default', tabs as SessionTab[]);
+    $readLater.addTabs('default', tabs.map(simplify));
     if(close){
       closeTabs();
     }else{
@@ -336,9 +337,9 @@ const IndexPopup = () => {
   const saveToSession = ({id = '', name = ''} = {}, { close = false } = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
-      SESSION_LIST['session'].addTabs(id, (_tabs as SessionTab[]));
+      SESSION_LIST['session'].addTabs(id, _tabs.map(simplify));
     }else{
-      SESSION_LIST['session'].createSession({name, tabs: (_tabs as SessionTab[])})
+      SESSION_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
     }
     if(close){
       closeTabs();

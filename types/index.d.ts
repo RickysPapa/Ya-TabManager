@@ -37,12 +37,11 @@ interface YATab {
   isClosed?: number;
 }
 
-
-interface Session {
+interface Session<T> {
   id: string;
   ts: number;
   name: string;
-  tabs: SessionTab[];
+  tabs: T[];
 }
 
 interface ChromeWindow extends chrome.windows.Window{
