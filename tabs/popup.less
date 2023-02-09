@@ -30,6 +30,15 @@ ul{
   flex-direction: row;
   align-items: center;
 }
+
+.relative{
+  position: relative;
+}
+
+.space-between{
+  justify-content: space-between;
+}
+
 .flex-1{
   flex: 1;
 }
@@ -116,9 +125,18 @@ ul{
     flex-direction: column;
     flex: 1;
   }
-  .tab-list{
+  .tab-list, .history-list{
     height: 400px;
     overflow-y: scroll;
+  }
+  .history-list{
+    background: #333333;
+    position: absolute;
+    top: 0;
+    right: -90%;
+    width: 90%;
+    transition-duration: 0.3s;
+    transform: translateX(0);
   }
   .tab-item{
     display: flex;

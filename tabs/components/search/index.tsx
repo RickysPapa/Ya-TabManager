@@ -12,7 +12,7 @@ export default function TMSearch({ dataSource, onResult }){
 
   const fuse = useMemo(() => {
     const searchData = dataSource.map(_ => _.title + _.url + '');
-    console.log('pattern2 >>', dataSource, searchData);
+    // console.log('pattern2 >>', dataSource, searchData);
     // const uf = new uFuzzy({});
     // const idxs = uf.filter(windowSearchSource, e.target.value);
     return new Fuse(searchData, {
@@ -28,9 +28,9 @@ export default function TMSearch({ dataSource, onResult }){
     const _input = _v.trim()
     if(_input){
       const pattern = `'${_input.split(' ').join(" '")}`
-      console.log('pattern >>', pattern);
+      // console.log('pattern >>', pattern);
       const matches = fuse.search(pattern)
-      console.log('pattern >>2', matches);
+      // console.log('pattern >>2', matches);
       const _list = matches.map(_ => dataSource[_.refIndex]);
       onResult(_list);
       return;
@@ -43,7 +43,7 @@ export default function TMSearch({ dataSource, onResult }){
   }, [onSearch])
 
   const onChange = useCallback((e) => {
-    console.log('patter onChange >> ', e.target.value);
+    // console.log('patter onChange >> ', e.target.value);
     if(inComposition.current){
       value.current = e.target.value;
       return;
@@ -53,14 +53,14 @@ export default function TMSearch({ dataSource, onResult }){
 
   useEffect(() => {
     if(searchEl.current){
-      console.log('searchEl.current', searchEl.current)
+      // console.log('searchEl.current', searchEl.current)
       searchEl.current.input.addEventListener("compositionstart", e => {
         inComposition.current = true;
         // console.log("onSearch compositionstart", e);
       });
       searchEl.current.input.addEventListener("compositionend", e => {
         inComposition.current = false;
-        console.log("pattern compositionend", value.current);
+        // console.log("pattern compositionend", value.current);
         _onSearch.current && _onSearch.current(value.current);
         // onSearch(value.current);
 

@@ -1,7 +1,3 @@
-interface Session {
-
-}
-
 interface ManagerState{
   windowList: chrome.windows.Window[];
   savedSessionList: any[];
@@ -17,6 +13,7 @@ interface ManagerState{
   showSearchResult: boolean;
   searchResult: any[];
   curDomain: string;
+  recentClosed: any;
   // [key: string]: any;
 }
 
@@ -28,6 +25,18 @@ interface SessionTab {
   url: string;
   ts: number;
 }
+
+interface YATab {
+  id: number;
+  wId?: number;
+  favIconUrl: string;
+  title: string;
+  url: string;
+  cr: number;
+  up: number;
+  isClosed?: number;
+}
+
 
 interface Session {
   id: string;

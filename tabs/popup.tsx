@@ -1,5 +1,10 @@
 import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
-import {DeleteOutlined} from '@ant-design/icons';
+import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
+import EventEmitter from 'eventemitter3';
+import {db} from '../lib/db';
+// import ClosedTabStorage from '../lib/ClosedTabStorage';
+import StorageListener from '../lib/StorageListener';
+import debounce from 'lodash/debounce';
 // import { useSetState, useToggle, useMap, useSelections } from 'ahooks';
 // import {Modal, Form, Input, Upload } from 'antd';
 
@@ -19,12 +24,13 @@ import {useBaseIdAndTimeStamp} from '~lib/utils';
 import './popup.less';
 // import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
-import { InputRef, Tabs } from "antd";
 import TMSearch from './components/search';
 // import dayjs from "dayjs";
 
+const EE = new EventEmitter()
+
+let test = 1;
 const { Dragger } = Upload;
-const { Search } = Input;
 const SESSION_TYPE_LIST = {
   session: 'savedSessionList',
   window: 'windowList',
@@ -36,17 +42,23 @@ const STORAGE_KEY = {
   readLater: '$readLater'
 }
 
-let inputChinese = false;
+let currentWindowWithDetail;
+const _startTime = Date.now();
+chrome.windows.getAll({populate: true}).then((_w) => {
+  console.log('chrome.windows.getAll >>', Date.now() - _startTime, _w);
+  currentWindowWithDetail = _w;
+});
 
 const IndexPopup = () => {
   const [state, setState] = useSetState<ManagerState>({
     // Total Data
-    windowList: [],
+    windowList: currentWindowWithDetail,
     savedSessionList: [],
     readLaterList: [],
     // For current data
     curSessionType: 'window',
-    curSessionId: 0,
+    curSessionId: currentWindowWithDetail.length ? currentWindowWithDetail.find(_ => _.focused)?.id || currentWindowWithDetail?.[0]?.id : 0,
+
     shouldGroupByDomain: false,
     showDuplicateTabs: false,
     showSearchResult: false,
@@ -55,6 +67,7 @@ const IndexPopup = () => {
     // curShownTabs: [],
     // For User-Action
     // tabSelected: [],
+    recentClosed: {},
     // domainList: null,
     curDomain: '',
   });
@@ -62,6 +75,7 @@ const IndexPopup = () => {
   const {curSessionType, curSessionId} = state;
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
+  const [showHistory, {toggle: toggleHistory}] = useToggle(false);
   const [removedMap, removedMapApi] = useMap([]);
   const [openedUrlMap, openedTabMapApi] = useMap([]);
 
@@ -72,15 +86,20 @@ const IndexPopup = () => {
   // const [showImport, {toggle: toggleImportModal}] = useToggle(false);
   // const []
 
-  const $windows = useSessionList();
+  // const $windows = useSessionList({chromeStorageKey: '$window'});
+  const $windows = useSessionList({initialData: currentWindowWithDetail});
   const $sessions = useSessionList({chromeStorageKey: '$session'});
-  const $readLater = useSessionList({chromeStorageKey: '$readLater', initialData: {
-    default: {tabs: []}
-  }});
+  const $readLater = useSessionList({chromeStorageKey: '$readLater', initialData: [{
+    id: 'default',
+    tabs: []
+  }]});
+  const $windowsRef = useRef($windows);
+  $windowsRef.current = $windows;
 
-  console.log('$sessions >>', $sessions);
+  // console.log('state.windowList', state.windowList);
+  // console.log('$sessions >>', $sessions);
   console.log('$windows >>', $windows);
-  console.log('$readLater >>', $readLater);
+  // console.log('$readLater >>', $readLater);
 
   const SESSION_LIST = {
     session: $sessions,
@@ -88,8 +107,12 @@ const IndexPopup = () => {
     readLater: $readLater
   }
 
+  // useEffect(() => {
+    // EE.once('global-data-ready', currentWindowWithDetail);
+  // })
+
   const {windowSearchSource, windowSearchSourceData} = useMemo(() => {
-    return Object.values($windows.kv).reduce((acc, cur) => {
+    return $windows.list.reduce((acc, cur) => {
       console.log('windowSearchSource > ', cur.tabs);
       acc.windowSearchSource = acc.windowSearchSource.concat(cur.tabs.map(_ => _.title + _.url + ''))
       acc.windowSearchSourceData = acc.windowSearchSourceData.concat(cur.tabs)
@@ -98,13 +121,13 @@ const IndexPopup = () => {
       windowSearchSource: [],
       windowSearchSourceData: []
     })
-  }, [$windows.kv])
+  }, [$windows.list])
 
-
-  const curSessionTabs  = useMemo(() => {
-    const _curSessionTabs = SESSION_LIST?.[curSessionType].kv?.[curSessionId]?.tabs || [];
+  const curSessionTabs = useMemo(() => {
+    const _curSessionTabs = SESSION_LIST?.[curSessionType].getTabs(curSessionId);
     return (_curSessionTabs as $Tab[]).filter(_ => !removedMapApi.get(_.id));
-  }, [state.curSessionType, state.curSessionId, removedMap])
+  }, [state.curSessionType, state.curSessionId, removedMap, $windows.list])
+
 
   useEffect(() => {
     resetGroupByDomain();
@@ -216,15 +239,40 @@ const IndexPopup = () => {
   console.log('TabSelect >>', TabSelect.selected);
   console.log('currentState >>', state);
 
-
-  const searchEl = useRef(null);
   useEffect(() => {
-    chrome.windows.getAll({populate: true}).then(res => {
-      $windows.reset(res);
-      setState({
-        windowList: res,
-        curSessionId: res[0].id
+    console.log('didMount >>', Date.now());
+
+    chrome.tabs.onCreated.addListener((tab) => {
+      // console.log('onCreated >>', tab);
+      $windowsRef.current.insertTab(tab.windowId, tab.index, tab);
+    })
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      // console.log('onUpdated >>', tabId, changeInfo, tab);
+      console.log('$trigger onRemoved');
+      if(changeInfo.status !== 'complete'){
+        $windowsRef.current.updateTab(tab.windowId, tab);
+      }
+    })
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+      // console.log('onRemoved >>', tabId, removeInfo);
+      $windowsRef.current.removeTab(removeInfo.windowId, tabId);
+    })
+
+    const resetWindow = (tabId, info) => {
+      console.log('$trigger resetWindow');
+      const wid = info.windowId || info.newWindowId || info.oldWindowId || info.id;
+      chrome.windows.get(wid, {populate: true}).then((_) => {
+        $windowsRef.current.resetTabs(wid, _.tabs);
       });
+    }
+
+    chrome.tabs.onMoved.addListener(debounce(resetWindow, 500));
+    chrome.tabs.onAttached.addListener(resetWindow)
+    chrome.tabs.onDetached.addListener(resetWindow);
+
+    chrome.windows.onCreated.addListener((_w) => {
+      console.log('windows.onCreated popup.ts >>', _w);
+      $windowsRef.current.createSession({tabs: [], ..._w});
     })
 
     try{
@@ -235,34 +283,12 @@ const IndexPopup = () => {
     }catch (e){
     }
 
-
-
-
-
-    // chrome.sessions.getRecentlyClosed((res) => {
-    //   console.log('getRecentlyClosed', res);
-    // })
-
-    // chrome.tabs.onRemoved.addListener(async (_tabId, _removeInfo) => {
-    //   if(_removeInfo.isWindowClosing === true){
-    //     const _windowList = state.windowList.filter(_ => _removeInfo.windowId !== _.id);
-    //     setState({
-    //       windowList: _windowList,
-    //       curSessionId: _removeInfo.windowId === state.curSessionId ? _windowList?.[0]?.id : state.curSessionId
-    //     })
-    //   }else{
-    //     // TODO 性能很差 建议用 windowId[] 配合 windowMap{} 来实现一个 useDynamicList
-    //     const newWindow = await chrome.windows.get(_removeInfo.windowId, {
-    //       populate: true
-    //     })
-    //     setState(_state => {
-    //       const _windowList = _state.windowList.map(_ => _removeInfo.windowId === _.id ? newWindow : _)
-    //       return {
-    //         windowList: _windowList
-    //       };
-    //     })
-    //   }
-    // })
+    StorageListener.listen('$closed', (newValue) => {
+      console.log('storage.onChanged $closed >> ', newValue);
+      setState({
+        recentClosed: newValue
+      })
+    })
   }, [])
 
   // useKeyPress(() => true, (e) => {
@@ -312,7 +338,7 @@ const IndexPopup = () => {
     if(id){
       SESSION_LIST['session'].addTabs(id, (_tabs as SessionTab[]));
     }else{
-      SESSION_LIST['session'].create({name, tabs: (_tabs as SessionTab[])})
+      SESSION_LIST['session'].createSession({name, tabs: (_tabs as SessionTab[])})
     }
     if(close){
       closeTabs();
@@ -353,8 +379,8 @@ const IndexPopup = () => {
 
   function exportData(){
     const _data = {
-      sessions: $sessions.kv,
-      readLater: $readLater.kv
+      sessions: $sessions.list,
+      readLater: $readLater.list
     };
 
     const blob = new Blob([JSON.stringify(_data, null, 2)], {
@@ -406,9 +432,13 @@ const IndexPopup = () => {
   function openSession(){
     openTabs({
       newWindow: true,
-      tabs: $sessions.kv[state.curSessionId].tabs
+      tabs: $sessions.getTabs(state.curSessionId),
     })
   }
+
+  // console.log('history', ClosedTabStorage.ts, ClosedTabStorage.getList(curSessionId), ClosedTabStorage.kv);
+  // console.log('chrome.window.render >>>>', currentWindowWithDetail);
+  console.log('render >>', Date.now() - _startTime, curShownTabs);
 
   return (
     <div className="popup" >
@@ -441,7 +471,7 @@ const IndexPopup = () => {
             <p className="title">Windows</p>
             <ul className="list">
               {/*{state.windowList.map((window) => {*/}
-              {$windows.list.map((id) => {
+              {$windows.list.map(({id}) => {
                 return (
                   <li key={id} className="window-item" onClick={() => {
                     setState({
@@ -460,11 +490,11 @@ const IndexPopup = () => {
             <p className="title">Sessions</p>
             <ul className="session-list">
               {/*{state.savedSessionList.map((session) => {*/}
-              {$sessions.list.map((id) => {
+              {$sessions.list.map(( _session ) => {
                 return (
-                  <li key={id} className="item" onClick={() => {
-                    setState({ curSessionType: 'session', curSessionId: id })
-                  }}>{$sessions.kv[id]?.name || '未命名'}</li>
+                  <li key={_session.id} className="item" onClick={() => {
+                    setState({ curSessionType: 'session', curSessionId: _session.id })
+                  }}>{_session?.name || '未命名'}</li>
                 );
               })}
             </ul>
@@ -530,43 +560,73 @@ const IndexPopup = () => {
           ) : null}
 
 
-          <div className="pt-6 pb-6">
-            <span
-              className={`mr-6 tab-checkbox iconfont ${TabSelect.allSelected ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
-              onClick={(e) => {
-                TabSelect.toggleAll();
-              }}
-            />
-            <span>{TabSelect.allSelected ? 'Unselect All' : 'Select All '}</span>
+          <div className="pt-6 pb-6 row space-between">
+            <div onClick={(e) => { TabSelect.toggleAll(); }} >
+              <span className={`mr-6 tab-checkbox iconfont ${TabSelect.allSelected ? 'icon-yigouxuan' : 'icon-weigouxuan'}`} />
+              <span>{TabSelect.allSelected ? 'Unselect All' : 'Select All '}</span>
+            </div>
+            <div onClick={(e) => {
+              toggleHistory();
+            }} >
+              <HistoryOutlined />
+              <span>History</span>
+            </div>
           </div>
 
-          <ul className="tab-list">
-            {curShownTabs.map((tab) => {
-              // 删除的暂时不显示
-              return removedMapApi.get(tab.id) ? null : (
-                <li key={tab.id} className="tab-item" >
-                  <span
-                    className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
-                    onClick={(e) => {
-                      TabSelect.toggle(tab.id);
-                    }}
-                  />
-                  <div className="tab-title" onClick={() => {
-                    if(curSessionType === 'window'){
-                      chrome.tabs.update((tab as ChromeTab).id, {active: true})
-                      chrome.windows.update((tab as ChromeTab).windowId, {focused: true})
-                    }else{
-                      openTabs({tabs: [tab], active: true});
-                    }
-                  }}>
-                    <img className="tab-favicon" src={tab.favIconUrl}/>
-                    <div className="tab-title-text" >{tab.title}</div>
-                    <button></button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="relative" >
+            <ul className="tab-list">
+              {curShownTabs.map((tab) => {
+                // 删除的暂时不显示
+                return removedMapApi.get(tab.id) ? null : (
+                  <li key={tab.id} className="tab-item" >
+                    <span
+                      className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
+                      onClick={(e) => {
+                        TabSelect.toggle(tab.id);
+                      }}
+                    />
+                    <div className="tab-title" onClick={() => {
+                      if(curSessionType === 'window'){
+                        chrome.tabs.update((tab as ChromeTab).id, {active: true})
+                        chrome.windows.update((tab as ChromeTab).windowId, {focused: true})
+                      }else{
+                        openTabs({tabs: [tab], active: true});
+                      }
+                    }}>
+                      <img className="tab-favicon" src={tab.favIconUrl}/>
+                      <div className="tab-title-text" >{tab.title}</div>
+                      <button></button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/*{showHistory ? (*/}
+              <ul className="history-list" style={showHistory ? {transform: `translateX(-100%)`} : {}}>
+                {(state.recentClosed[curSessionId] || []).map(tab => {
+                  return (
+                    <li key={tab.id} className="tab-item" >
+                    <span
+                      className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
+                      onClick={(e) => {
+                        TabSelect.toggle(tab.id);
+                      }}
+                    />
+                      <div className="tab-title" onClick={() => {
+                        openTabs({tabs: [tab], active: true});
+                      }}>
+                        <img className="tab-favicon" src={tab.favIconUrl}/>
+                        <div className="tab-title-text" >{tab.title}</div>
+                        <button></button>
+                      </div>
+                    </li>
+                  );
+                })}
+                <li>Show More</li>
+              </ul>
+            {/*) : null}*/}
+          </div>
         </div>
 
       </div>
@@ -606,9 +666,9 @@ const IndexPopup = () => {
               placeholder="创建新的收藏夹"
               defaultValue=""
               // style={{ width: 120 }}
-              options={[{label: '新建收藏夹', value: ''}].concat($sessions.list.map(_id => ({
-                label: $sessions.kv[_id]?.name || '未命名',
-                value: _id
+              options={[{label: '新建收藏夹', value: ''}].concat($sessions.list.map(_session => ({
+                label: _session?.name || '未命名',
+                value: _session.id
               })))}
             />
           </Form.Item>
