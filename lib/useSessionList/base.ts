@@ -1,16 +1,22 @@
 import { useEffect, useState, useMemo } from "react";
-import {useSetState} from 'ahooks';
+import type { useSetState } from 'ahooks';
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import { localSet, localGet } from '~/lib/utils';
 import dayjs from "dayjs";
 
-interface State<T> {
+export interface State<T> {
   sessionList: Session<T>[];
-  // kv: WindowMap | SessionMap;
   isInit: boolean;
 }
 
-export function useSessionList<T extends YATab | ChromeTab>({ chromeStorageKey = null, initialData = null} = {}){
+export interface UseSessionListProps<T> {
+  useSetState: typeof useSetState;
+  chromeStorageKey: string;
+  initialData: Session<T>[]
+}
+
+
+export default function useSessionList<T extends YATab | ChromeTab>({ useSetState, chromeStorageKey = null, initialData = null}: UseSessionListProps<T>){
   const [ state, setState ] = useSetState<State<T>>({ sessionList: initialData || [], isInit: false });
   const { sessionList, isInit } = state;
 
@@ -91,7 +97,7 @@ export function useSessionList<T extends YATab | ChromeTab>({ chromeStorageKey =
 
   useEffect(() => {
     if(chromeStorageKey){
-      localGet([chromeStorageKey]).then((res) => {
+      localGet(chromeStorageKey).then(res => {
         if(res){
           reset(res);
         }else{
@@ -99,7 +105,7 @@ export function useSessionList<T extends YATab | ChromeTab>({ chromeStorageKey =
             isInit: true
           })
         }
-      });
+      })
     }
   }, [])
 

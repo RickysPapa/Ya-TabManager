@@ -6,7 +6,9 @@ import ClosedTabStorage from "~lib/ClosedTabStorage";
 import ClosedWindowStorage from "~lib/ClosedWindowStorage";
 import TMWindow from "~lib/TMWindow";
 import Tab, { simplify } from "~lib/TMTab";
+import WindowManager from '~/lib/new/WindowManager'
 
+WindowManager.init({ source: 'background', storageMode: 'write' });
 
 export {}
 
@@ -37,13 +39,8 @@ async function _deleteCurTabs(before){
   await db.tabs.bulkPut(bulkData);
 }
 
-
-
-
 const saveCreated = debounce(_saveCreated, 3000);
 
-// let removedList = [];
-// chrome.storage.local.({[`onSuspend${Date.now()}`]: Date.now()})
 const windowKV = {};
 const windowList = [];
 
@@ -60,7 +57,6 @@ chrome.windows.getAll({populate: true}).then(_windowList => {
     // TODO 每次 worker 启动都会执行会太资源，使用时间戳减少更新量
     db.tabs.bulkPut(_w.tabs.map(Tab.simplify));
   })
-  // chrome.storage.local.set({'w-list': windowList})
 })
 
 chrome.windows.onCreated.addListener((window) => {
@@ -74,8 +70,9 @@ chrome.windows.onCreated.addListener((window) => {
   windowKV[window.id] = instance;
 })
 
-chrome.windows.onRemoved.addListener((window) => {
-  console.log('$bg windows.onRemoved', window);
+chrome.windows.onRemoved.addListener((windowId) => {
+  console.log('$bg windows.onRemoved', windowId);
+
 })
 
 chrome.tabs.onCreated.addListener((tab) => {
@@ -131,10 +128,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 })
 
 chrome.runtime.onSuspend.addListener(() => {
-  chrome.storage.local.set({[`onSuspend${Date.now()}`]: Date.now()})
 });
 
 chrome.runtime.onSuspendCanceled.addListener(() => {
-  chrome.storage.local.set({[`onSuspendCanceled${Date.now()}`]: Date.now()})
 });
 

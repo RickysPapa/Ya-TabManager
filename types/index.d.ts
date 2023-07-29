@@ -1,4 +1,7 @@
+import type { IWindow } from "~lib/new/WindowManager";
+
 interface ManagerState{
+  windows: IWindow[];
   windowList: chrome.windows.Window[];
   savedSessionList: any[];
   readLaterList: any[],
@@ -39,8 +42,8 @@ interface YATab {
 
 interface Session<T> {
   id: string;
-  ts: number;
-  name: string;
+  ts?: number;
+  name?: string;
   tabs: T[];
 }
 

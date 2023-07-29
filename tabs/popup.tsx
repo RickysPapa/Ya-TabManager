@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
 import EventEmitter from 'eventemitter3';
+import WindowManager from '~/lib/new/WindowManager'
+import type { IWindow } from '~/lib/new/WindowManager'
 import {db} from '../lib/db';
 // import ClosedTabStorage from '../lib/ClosedTabStorage';
 import StorageListener from '../lib/StorageListener';
@@ -9,6 +11,7 @@ import debounce from 'lodash/debounce';
 // import {Modal, Form, Input, Upload } from 'antd';
 
 import useSetState from 'ahooks/es/useSetState';
+import { useAsyncEffect } from 'ahooks';
 import useToggle from 'ahooks/es/useToggle';
 import useMap from 'ahooks/es/useMap';
 import useSelections from 'ahooks/es/useSelections';
@@ -20,7 +23,7 @@ import Select from 'antd/es/select';
 import Button from 'antd/es/button';
 import Upload from 'antd/es/upload';
 // import Result from 'antd/es/result';
-import {useBaseIdAndTimeStamp} from '~lib/utils';
+import { useBaseIdAndTimeStamp, lookLocalStorage, localGet } from "~lib/utils";
 import './popup.less';
 // import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
@@ -38,6 +41,8 @@ const SESSION_TYPE_LIST = {
   readLater: 'readLaterList'
 }
 
+
+
 const STORAGE_KEY = {
   session: '$session',
   readLater: '$readLater'
@@ -53,12 +58,13 @@ chrome.windows.getAll({populate: true}).then((_w) => {
 const IndexPopup = () => {
   const [state, setState] = useSetState<ManagerState>({
     // Total Data
+    windows: [],
     windowList: currentWindowWithDetail,
     savedSessionList: [],
     readLaterList: [],
     // For current data
     curSessionType: 'window',
-    curSessionId: currentWindowWithDetail.length ? currentWindowWithDetail.find(_ => _.focused)?.id || currentWindowWithDetail?.[0]?.id : 0,
+    curSessionId: 0,
 
     shouldGroupByDomain: false,
     showDuplicateTabs: false,
@@ -87,6 +93,7 @@ const IndexPopup = () => {
   // const [showImport, {toggle: toggleImportModal}] = useToggle(false);
   // const []
 
+
   // const $windows = useSessionList({chromeStorageKey: '$window'});
   const $windows = useSessionList<ChromeTab>({initialData: currentWindowWithDetail});
   const $sessions = useSessionList<YATab>({chromeStorageKey: '$session'});
@@ -99,13 +106,14 @@ const IndexPopup = () => {
 
   // console.log('state.windowList', state.windowList);
   // console.log('$sessions >>', $sessions);
-  console.log('$windows >>', $windows);
+  // console.log('$windows >>', $windows);
+  // console.log('state.closeTabs >>', state.recentClosed);
   // console.log('$readLater >>', $readLater);
 
   const SESSION_LIST = {
-    session: $sessions,
-    window: $windows,
-    readLater: $readLater
+    // session: $sessions,
+    window: state.windows,
+    // readLater: $readLater
   }
 
   // useEffect(() => {
@@ -125,7 +133,8 @@ const IndexPopup = () => {
   }, [$windows.list])
 
   const curSessionTabs = useMemo(() => {
-    const _curSessionTabs = SESSION_LIST?.[curSessionType].getTabs(curSessionId);
+    // const _curSessionTabs = SESSION_LIST?.[curSessionType].getTabs(curSessionId);
+    const _curSessionTabs = SESSION_LIST[curSessionType].find(_ => _.id === curSessionId)?.tabs || [];
     return (_curSessionTabs as $Tab[]).filter(_ => !removedMapApi.get(_.id));
   }, [state.curSessionType, state.curSessionId, removedMap, $windows.list])
 
@@ -237,11 +246,29 @@ const IndexPopup = () => {
 
   const TabSelect = useSelections<number | string>(curShownTabIds);
 
-  console.log('TabSelect >>', TabSelect.selected);
-  console.log('currentState >>', state);
+  // console.log('TabSelect >>', TabSelect.selected);
+  // console.log('currentState >>', state);
+
+
+  useAsyncEffect(async function*() {
+    const closeTabs = await localGet('$closed');
+    setState({
+      recentClosed: closeTabs
+    });
+  }, []);
+
 
   useEffect(() => {
     console.log('didMount >>', Date.now());
+
+    WindowManager.init({
+      onUpdate: (_windows) => {
+        console.log('pupup >> WindowManager onUpdate');
+        setState({ windows: _windows, curSessionId: _windows?.[0].id });
+      },
+      source: 'popup',
+      storageMode: 'read'
+    });
 
     chrome.tabs.onCreated.addListener((tab) => {
       // console.log('onCreated >>', tab);
@@ -365,12 +392,6 @@ const IndexPopup = () => {
     TabSelect.unSelectAll();
   }
 
-  const lookLocalStorage = async () => {
-    // const res = await chrome.storage.local.get()
-    // console.log('lookLocalStorage >>', res);
-    // const res1 = await chrome.storage.local.getBytesInUse()
-    // console.log('lookLocalStorage >>', res1);
-  }
 
   function resetGroupByDomain() {
     setState({
@@ -440,6 +461,7 @@ const IndexPopup = () => {
   // console.log('history', ClosedTabStorage.ts, ClosedTabStorage.getList(curSessionId), ClosedTabStorage.kv);
   // console.log('chrome.window.render >>>>', currentWindowWithDetail);
   console.log('render >>', Date.now() - _startTime, curShownTabs);
+  // return (<div>111</div>);
 
   return (
     <div className="popup" >
@@ -466,20 +488,28 @@ const IndexPopup = () => {
           })
         }}>OpenInWindow</button>
       </div>
+
+      <div>
+        {/*{JSON.stringify(state.windows)}*/}
+      </div>
+
       <div className="main">
         <div className="main-left" >
           <div className="section">
             <p className="title">Windows</p>
             <ul className="list">
               {/*{state.windowList.map((window) => {*/}
-              {$windows.list.map(({id}) => {
+              {state.windows.map(({id, name}) => {
                 return (
                   <li key={id} className="window-item" onClick={() => {
                     setState({
                       curSessionId: id,
                       curSessionType: 'window',
                     })
-                  }}>{id}</li>
+                  }}>
+                    <span className="item-status item-status-opening" />
+                    <span>{name || id}</span>
+                  </li>
                 );
               })}
             </ul>
@@ -602,31 +632,28 @@ const IndexPopup = () => {
                 );
               })}
             </ul>
-
-            {/*{showHistory ? (*/}
-              <ul className="history-list" style={showHistory ? {transform: `translateX(-100%)`} : {}}>
-                {(state.recentClosed[curSessionId] || []).map(tab => {
-                  return (
-                    <li key={tab.id} className="tab-item" >
+            <ul className="history-list" >
+              {(state.recentClosed[curSessionId] || []).map(tab => {
+                return (
+                  <li key={tab.id} className="tab-item" >
                     <span
                       className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
                       onClick={(e) => {
                         TabSelect.toggle(tab.id);
                       }}
                     />
-                      <div className="tab-title" onClick={() => {
-                        openTabs({tabs: [tab], active: true});
-                      }}>
-                        <img className="tab-favicon" src={tab.favIconUrl}/>
-                        <div className="tab-title-text" >{tab.title}</div>
-                        <button></button>
-                      </div>
-                    </li>
-                  );
-                })}
-                <li>Show More</li>
-              </ul>
-            {/*) : null}*/}
+                    <div className="tab-title" onClick={() => {
+                      openTabs({tabs: [tab], active: true});
+                    }}>
+                      <img className="tab-favicon" src={tab.favIconUrl}/>
+                      <div className="tab-title-text" >{tab.title}</div>
+                      <button></button>
+                    </div>
+                  </li>
+                );
+              })}
+              <li>Show More</li>
+            </ul>
           </div>
         </div>
 

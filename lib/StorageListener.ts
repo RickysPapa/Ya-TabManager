@@ -5,21 +5,36 @@
 class StorageListener {
   onListening = false;
   listener = {};
-  // constructor() {
-  // }
+  constructor() {
+    this.init();
+  }
 
-  listen(key, cb){
-    this.listener[key] = cb;
-    if(!this.onListening){
-      this.onListening = true;
-      chrome.storage.onChanged.addListener((changes) => {
+  init(){
+    chrome.storage.onChanged.addListener((changes, areaName = 'local') => {
+      if(this.listener[areaName]){
         Object.keys(changes).forEach(_k => {
-          if(this.listener[_k]){
-            this.listener[_k](changes[_k].newValue, changes[_k].oldValue);
+          if(this.listener[areaName][_k]){
+            // console.log(typeof this.listener[areaName][_k], this.listener[areaName][_k])
+            this.listener[areaName][_k].forEach(fun => fun(changes[_k].newValue, changes[_k].oldValue));
             console.log(`storage.onChanged ${_k} callback  >> `, changes[_k].newValue);
           }
         })
-      });
+      }
+    });
+    this.onListening = true;
+  }
+
+  listen<T>(key, cb: (newValue: T, oldValue: T) => void, area = 'local'){
+    if(!this.listener[area]){
+      this.listener[area] = {};
+    }
+    if(!this.listener[area][key]){
+      this.listener[area][key] = [];
+    }
+    this.listener[area][key].push(cb);
+    if(!this.onListening){
+      this.init();
+      this.onListening = true;
     }
   }
 }

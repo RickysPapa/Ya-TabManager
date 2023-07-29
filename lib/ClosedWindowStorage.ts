@@ -1,5 +1,6 @@
 import debounce from 'lodash/debounce';
 import type { ClosedTab } from "~lib/db";
+import { localSet, localGet } from '~/lib/utils';
 
 interface KV {
   [k: string]: ClosedTab[]
@@ -11,9 +12,9 @@ class ClosedWindowStorage {
 
   constructor() {
     this.saveToCache = debounce(this.saveToCache.bind(this), 500);
-    chrome.storage.local.get(STORAGE_KEY).then((res) => {
-      this.kv = res[STORAGE_KEY] || {};
-    })
+    localGet(STORAGE_KEY).then(res => {
+      this.kv = res;
+    });
   }
 
   getList(wId){
@@ -35,9 +36,7 @@ class ClosedWindowStorage {
 
   saveToCache(){
     console.log('ClosedWindowStorage >>', this.kv);
-    chrome.storage.local.set({[STORAGE_KEY]: this.kv}).catch((e) => {
-      throw e;
-    });
+    localSet({[STORAGE_KEY]: this.kv});
   };
 }
 

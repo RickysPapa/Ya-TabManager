@@ -1,5 +1,7 @@
 import StorageListener from './StorageListener';
 import {simplify} from './TMTab';
+import { localGet } from '~/lib/utils';
+
 
 function processInitialData(data){
   if(!data) return;
@@ -26,7 +28,7 @@ function processInitialData(data){
 // }
 
 class TMWindow{
-  id: number;
+  id: string;
   name: string;
   activeTabId: number;
   relatedId?: number;
@@ -51,8 +53,8 @@ class TMWindow{
         this.tabKV[_.id] =  _;
       })
     }
-    chrome.storage.local.get([this.id]).then(res => {
-      this.closedList = res[this.id]?.closedList || [];
+    localGet(this.id).then(res => {
+      this.closedList = res?.closedList || [];
     })
     this.syncStorage();
 
@@ -96,7 +98,7 @@ class TMWindow{
   }
 
   add(items: YATab[], index){
-    this.tabList.splice(index || this.tabList.length, 0, ...items);
+    this.tabList?.splice(index || this.tabList.length, 0, ...items);
     items.forEach((item) => {
       this.tabKV[item.id] = item;
     })

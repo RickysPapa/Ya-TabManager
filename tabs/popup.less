@@ -100,7 +100,7 @@ ul{
     }
   }
   .main-left{
-    width: 120px;
+    width: 140px;
     .section{
       .title{
         font-size: 14px;
@@ -118,6 +118,22 @@ ul{
   .window-item{
     background-color: #333;
     line-height: 22px;
+    .item-status{
+      width: 6px;
+      height: 6px;
+      border-radius: 6px;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 4px;
+      margin-left: 4px;
+      margin-bottom: 3px;
+      &-opening{
+        background-color: lightgreen;
+      }
+      &-closed{
+        background-color: red;
+      }
+    }
   }
   .main-right{
     width: 0;
@@ -126,17 +142,22 @@ ul{
     flex: 1;
   }
   .tab-list, .history-list{
-    height: 400px;
+    height: 300px;
+    overflow-y: scroll;
+    border: 1px solid #fff;
+  }
+  .history-list{
+    height: 200px;
     overflow-y: scroll;
   }
   .history-list{
-    background: #333333;
-    position: absolute;
-    top: 0;
-    right: -90%;
-    width: 90%;
-    transition-duration: 0.3s;
-    transform: translateX(0);
+    //background: #333333;
+    //position: absolute;
+    //top: 0;
+    //right: -90%;
+    //width: 90%;
+    //transition-duration: 0.3s;
+    //transform: translateX(0);
   }
   .tab-item{
     display: flex;

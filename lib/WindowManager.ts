@@ -1,5 +1,6 @@
 import StorageListener from './StorageListener';
 import { useBaseIdAndTimeStamp } from "~lib/utils";
+import { localSet, localGet } from '~/lib/utils';
 import dayjs from "dayjs";
 
 function processInitialData(data){
@@ -47,9 +48,7 @@ class WindowManager{
 
   syncStorage(){
     if(this._storageKey && this._storageMode === 'sync'){
-      chrome.storage.local.set({[this._storageKey]: this.list}).catch((e) => {
-        throw e;
-      });
+      localSet({[this._storageKey]: this.list});
     }
   }
 
