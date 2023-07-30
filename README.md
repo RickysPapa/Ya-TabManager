@@ -36,9 +36,9 @@ The easiest way to deploy your Plasmo extension is to use the built-in [bpp](htt
 1. 清空某个 Session 的 Tab 后，不会自动删除 session（考虑到用户可能还会在新增 Tab 进来）
 
 ## TODO
-[ ] 日志方案，复现问题使用
+- [ ] 日志方案，复现问题使用
 
 ## ~~功能列表~~
-[ ] 记录打开/关闭历史
-[ ] 能收藏 + 标签
-[ ] 全局搜索
+- [ ] 记录打开/关闭历史
+- [ ] 能收藏 + 标签
+- [ ] 全局搜索
