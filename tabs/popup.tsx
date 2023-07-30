@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
 import EventEmitter from 'eventemitter3';
 import WindowManager from '~/lib/new/WindowManager'
+import LeftPanelItem from './components/left-panel-item';
 import type { IWindow } from '~/lib/new/WindowManager'
 import {db} from '../lib/db';
 // import ClosedTabStorage from '../lib/ClosedTabStorage';
@@ -59,6 +60,8 @@ const IndexPopup = () => {
   const [state, setState] = useSetState<ManagerState>({
     // Total Data
     windows: [],
+    windowsClosed: [],
+
     windowList: currentWindowWithDetail,
     savedSessionList: [],
     readLaterList: [],
@@ -262,12 +265,11 @@ const IndexPopup = () => {
     console.log('didMount >>', Date.now());
 
     WindowManager.init({
-      onUpdate: (_windows) => {
-        console.log('pupup >> WindowManager onUpdate');
-        setState({ windows: _windows, curSessionId: _windows?.[0].id });
-      },
-      source: 'popup',
-      storageMode: 'read'
+      onUpdate: ({ current, closed }) => {
+        console.log('pupup >> WindowManager onUpdate', current, closed);
+        // setState({ windows: current, windowsClosed: closed, curSessionId: current?.[0].id });
+        setState({ windows: current, curSessionId: current?.[0].id });
+      }
     });
 
     chrome.tabs.onCreated.addListener((tab) => {
@@ -499,18 +501,38 @@ const IndexPopup = () => {
             <p className="title">Windows</p>
             <ul className="list">
               {/*{state.windowList.map((window) => {*/}
-              {state.windows.map(({id, name}) => {
-                return (
-                  <li key={id} className="window-item" onClick={() => {
+              {state.windows.map((item) => {
+                return <LeftPanelItem
+                  data={item}
+                  onClick={() => {
                     setState({
-                      curSessionId: id,
+                      curSessionId: item.id,
                       curSessionType: 'window',
                     })
-                  }}>
-                    <span className="item-status item-status-opening" />
-                    <span>{name || id}</span>
-                  </li>
-                );
+                  }}
+                  updateInfo={(data) => {
+                    WindowManager.updateWindowInfo(item.id, data)
+                  }}
+                />
+                // return (
+                //   <li key={id} className="window-item" onClick={() => {
+                //     setState({
+                //       curSessionId: id,
+                //       curSessionType: 'window',
+                //     })
+                //   }}>
+                //     {closed === true
+                //       ? (<span className="item-status item-status-closed" />)
+                //       : (<span className="item-status item-status-opening" />)
+                //     }
+                //     <span>{name || id}</span>
+                //     <input />
+                //     <div className="window-item-options" >
+                //       <span className={`iconfont icon-edit`} onClick={() => {}} />
+                //       <span className={`iconfont icon-close`} />
+                //     </div>
+                //   </li>
+                // );
               })}
             </ul>
           </div>

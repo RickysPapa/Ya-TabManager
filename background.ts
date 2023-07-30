@@ -8,7 +8,7 @@ import TMWindow from "~lib/TMWindow";
 import Tab, { simplify } from "~lib/TMTab";
 import WindowManager from '~/lib/new/WindowManager'
 
-WindowManager.init({ source: 'background', storageMode: 'write' });
+WindowManager.init({ isWorker: true });
 
 export {}
 

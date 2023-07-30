@@ -1,3 +1,5 @@
+export const NOOP = () => {};
+
 /**
  * 生成时间戳和简化ID
  */
