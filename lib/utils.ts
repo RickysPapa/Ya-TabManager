@@ -100,3 +100,7 @@ export const addChromeListen = (eventList: chrome.events.Event<any> | chrome.eve
     item.addListener(fun);
   })
 };
+
+// export const findIndex = (arr, key, value) => {
+//   arr.
+// }

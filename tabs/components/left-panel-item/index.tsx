@@ -4,22 +4,24 @@ import Input from 'antd/es/input';
 import type { IWindow }  from '~/lib/new/WindowManager';
 import { NOOP } from '~/lib/utils';
 import { useBoolean } from 'ahooks';
+import dayjs from "dayjs";
 
 const { Search } = Input;
 
 interface ILeftPanelItemProps {
-  data: IWindow,
-  onClick?: MouseEventHandler,
-  updateInfo?: Function
+  data: IWindow;
+  onClick?: MouseEventHandler;
+  updateInfo?: Function;
+  remove?: MouseEventHandler;
 }
 
-export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP }: ILeftPanelItemProps){
+export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP, remove = NOOP }: ILeftPanelItemProps){
   if(!data){
     console.log('LeftPanelItem >>', data);
     return null;
   }
-  const {id, name, closed} = data;
-  const [alias, setAlias] = useState('');
+  const {id, createAt, name, closed} = data;
+  const [alias, setAlias] = useState(name);
   const [editing, { setTrue, setFalse }] = useBoolean(false);
   return (
     <li key={id} className="window-item" onClick={onClick}>
@@ -34,6 +36,7 @@ export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP 
             // console.log('onInput >>', e.currentTarget.value);
             setAlias(e.currentTarget.value);
           }}
+          autoFocus
           onKeyDown={(e) => {
             // console.log('onKeyDown >>', e.key);
             if(e.key === 'Enter'){
@@ -45,11 +48,11 @@ export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP 
           }}
         />
       ) : (
-        <span>{alias || name || id}</span>
+        <span>{alias || dayjs(createAt).format('YYYY/MM/DD HH:MM') || id}</span>
       )}
       <div className="window-item-options" >
         <span className={`iconfont icon-edit`} onClick={setTrue} />
-        <span className={`iconfont icon-close`} />
+        <span className={`iconfont icon-close`} onClick={remove} />
       </div>
     </li>
   );

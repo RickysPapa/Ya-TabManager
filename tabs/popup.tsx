@@ -503,6 +503,7 @@ const IndexPopup = () => {
               {/*{state.windowList.map((window) => {*/}
               {state.windows.map((item) => {
                 return <LeftPanelItem
+                  key={item.id}
                   data={item}
                   onClick={() => {
                     setState({
@@ -510,6 +511,7 @@ const IndexPopup = () => {
                       curSessionType: 'window',
                     })
                   }}
+                  remove={() => WindowManager.removeWindow(item.id)}
                   updateInfo={(data) => {
                     WindowManager.updateWindowInfo(item.id, data)
                   }}

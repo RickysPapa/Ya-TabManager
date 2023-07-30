@@ -2,7 +2,7 @@ import StorageListener from '../StorageListener';
 import EventListener from '../EventListener';
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import { localSet, localGet, addChromeListen } from '~/lib/utils';
-import { throttle } from 'lodash';
+import { throttle, findIndex } from 'lodash';
 import dayjs from 'dayjs';
 import TMWindow from "~lib/TMWindow";
 import Tab from "~lib/TMTab";
@@ -111,6 +111,20 @@ class WindowManager {
       });
     }
 
+    // 用户自己关闭窗口，worker 会在后台更新缓存
+    // 前台：通过管理器关闭窗口要同步到后端
+    StorageListener.listen<IWindow[]>(CACHE_WINDOWS_CLOSED, (newValue) => {
+      this._closed = newValue;
+    });
+
+
+    // 后台：新建窗口时会初始化数据 如创建时间
+    // 前台：前台修改别名后更新缓存，用户直接关闭浏览器窗口需要保留别名信息
+    StorageListener.listen<IWindowsInfo>(CACHE_WINDOWS_EXT_INFO, (newValue) => {
+      this._extInfo = newValue;
+    });
+
+
     // if(!this._isWorker){
     //   StorageListener.listen<IWindowsInfo>(CACHE_WINDOWS_EXT_INFO, (newValue) => {
     //     this._extInfo = newValue;
@@ -131,7 +145,8 @@ class WindowManager {
     const worker_onWindowCreated = (win) => {
       this._updateExtInfo(win.id, {
         createAt: Date.now(),
-        name: dayjs().format('YYYY/MM/DD HH:mm'),
+        // name: dayjs().format('YYYY/MM/DD HH:mm'),
+        name: ''
       });
     };
 
@@ -140,6 +155,7 @@ class WindowManager {
      * @param id
      */
     const worker_onWindowsRemoved = (id) => {
+      console.log('worker_onWindowsRemoved >>', id);
       if(this._lasted[id]){
         this._closed.unshift({
           ...(this._extInfo[id] || {}),
@@ -170,44 +186,63 @@ class WindowManager {
     this._updateExtInfo(wid, data);
   }
 
-
-  async _updateExtInfo(wid: number, data: Record<string, any>){
-    const isRunningWindow = this._current.find(_ => _.id === wid);
-    if(isRunningWindow){
-      const extInfo = await localGet(CACHE_WINDOWS_EXT_INFO);
-      const latestExtInfo = Object.assign({}, this._extInfo, extInfo)
-      latestExtInfo[wid] = { ...latestExtInfo[wid], ...data }
-      localSet({[CACHE_WINDOWS_EXT_INFO]: latestExtInfo})
+  removeWindow(wid: number){
+    console.log('windowsManager removeWindow >>', wid);
+    if(findIndex(this._current, ['id', wid]) >= 0){
+      chrome.windows.remove(wid);
     }else{
-      const closedList = await localGet(CACHE_WINDOWS_CLOSED);
-      localSet({[CACHE_WINDOWS_CLOSED]: closedList.filter(_ => _).map((_) => {
-        if(_.id === wid){
-          return {
-            ..._,
-            ...data
-          }
-        }
-        return _;
-      })})
+      this._upsertClosed(wid);
     }
   }
 
-  get(){
-    return this._current;
+  async _updateExtInfo(wid: number, data: IWindowInfo){
+    const isClosedWindow = findIndex(this._closed, ['id', wid]) > -1;
+    // const isRunningWindow = findIndex(this._current, ['id', wid]) > -1;
+    // 如果是新创建的窗口，不会立即出现在缓存中，所以如果缓存中米有则说明是新建
+    // const isExistWindow= this._lasted[wid];
+    console.log('_updateExtInfo[0] >>', wid, isClosedWindow);
+    if(isClosedWindow){
+      await this._upsertClosed(wid, data);
+    }else{
+      this._extInfo[wid] = {...this._extInfo[wid], ...data};
+      // const extInfo = await localGet(CACHE_WINDOWS_EXT_INFO);
+      // const latestExtInfo = Object.assign({}, this._extInfo)
+      // latestExtInfo[wid] = { ...latestExtInfo[wid], ...data }
+      console.log('_updateExtInfo[0] >>', this._extInfo);
+      this._update();
+      await localSet({[CACHE_WINDOWS_EXT_INFO]: this._extInfo})
+    }
+  }
+
+  async _upsertClosed(wid, data?: IWindowInfo | IWindow){
+    // 因为前台和后台都会尽快更新历史（手动修改名称 | 关闭窗口自动触发）
+    // 所以这里保持从缓存中获取最新值，这个方法调用频率不高
+    // this._closed = await localGet(CACHE_WINDOWS_CLOSED);
+    const index = findIndex(this._closed, ['id', wid]);
+    if(index >= 0){
+      if(data){
+        this._closed[index] = { ...this._closed[index], ...data };
+      }else{
+        this._closed.splice(index, 1);
+      }
+    }else if(data){
+      this._closed.unshift(data as IWindow);
+    }
+    this._update();
+    await localSet({[CACHE_WINDOWS_CLOSED]: this._closed});
   }
 
   _update(windows = undefined){
     if(!windows){
       windows = this._current;
     }
-    const _windows = windows.map((_) => {
-      console.log('_update >>', _);
+    console.log('WindowManager _update >>');
+    this._current = windows.map((_) => {
       return {
         ..._,
         ...(this._extInfo[_.id] || {})
       };
     })
-    this._current = _windows;
     this.onUpdate && this.onUpdate({current: this._current.concat(this._closed)});
   }
 }

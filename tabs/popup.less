@@ -120,6 +120,7 @@ ul{
     position: relative;
     background-color: #333;
     line-height: 22px;
+    cursor: pointer;
     .item-status{
       width: 6px;
       height: 6px;
@@ -129,6 +130,9 @@ ul{
       margin-right: 4px;
       margin-left: 4px;
       margin-bottom: 3px;
+      &:hover{
+        font-weight: bold;
+      }
       &-opening{
         background-color: lightgreen;
       }
@@ -140,6 +144,12 @@ ul{
       position: absolute;
       right: 0;
       top: 0;
+      .icon-edit, .icon-close{
+        &:hover{
+          color: #fff;
+          font-weight: bold;
+        }
+      }
     }
   }
   .main-right{
