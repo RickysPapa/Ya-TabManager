@@ -30,13 +30,48 @@ interface IWindowInfo {
 
 export type IWindow = chrome.windows.Window & IWindowInfo;
 export type IWindowsInfo = Record<number, IWindowInfo>;
-const CACHE_WINDOWS = 'WINDOWS';
-const CACHE_WINDOWS_EXT_INFO = 'WINDOWS_EXT_INFO';
-const CACHE_WINDOWS_CLOSED = 'WINDOWS_CLOSED';
-// let cache_windows = null;
+const CACHE_COLLECTIONS= 'COLLECTIONS';
 
+interface ICollectionCommon{
+  id: string; // ts36
+  type: 'rl' | 'bk'; // ReadLater / Bookmark
+  visits: number; // 访问次数
+  lastVisit: number; // 上一次访问时间（包括后台新增/删除）
+  cr: number;
+}
 
-class WindowManager {
+export type ICollection = ICollectionCommon & {
+  name: string;
+};
+
+export type ICollectionGroup = ICollectionCommon & {
+  cId: string; // 集合id
+  name: string;
+  count: number;  // 项目归属 ???
+}
+
+export type ICollectionItem = ICollectionCommon & {
+  cId: string;
+  cgId: string;
+  tag: string; // 标签 xx,xx
+  icon: string;
+  title: string;
+  url: string;
+  status: number; // 已读/未读
+}
+
+interface IReadNote{
+  ciId: string; // 收藏id
+  comment: string; // 评论
+  highlight: string; // 高亮
+}
+
+// tab 存在 indexDB
+// collections + 分组信息 列表存在 indexBB 但缓存在 storage 一份
+
+class CollectionManager {
+  _collections = [];
+  _readLater: [];
   // 当前窗口列表(实时更新)
   _current: IWindow[] = [];
   // 已关闭(但用户未手动删除)的窗口列表

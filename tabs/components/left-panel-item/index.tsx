@@ -48,7 +48,7 @@ export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP,
           }}
         />
       ) : (
-        <span>{alias || dayjs(createAt).format('YYYY/MM/DD HH:MM') || id}</span>
+        <span>{alias || dayjs(createAt).format('YYYY/MM/DD HH:mm') || id}</span>
       )}
       <div className="window-item-options" >
         <span className={`iconfont icon-edit`} onClick={setTrue} />

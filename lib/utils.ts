@@ -10,6 +10,14 @@ export const useBaseIdAndTimeStamp = () => {
 };
 
 /**
+ * 时间戳 + 随机数生成近似唯一的 ID，因为随着时间递增所以(非并发情况下)不会重复
+ * 适合简单场景使用
+ */
+export const uid = () => {
+  return Date.now().toString(36) + '_' + Math.round(Math.random() * 1295).toString(36);
+}
+
+/**
  * 参数转换
  * @param key
  */

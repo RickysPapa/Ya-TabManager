@@ -1,6 +1,6 @@
 // import { useSessionList } from './lib/hooks';
 // import {useRequest} from 'ahooks';
-import {db, ClosedTab} from "~lib/db";
+import {db} from "~lib/db";
 import debounce from 'lodash/debounce';
 import ClosedTabStorage from "~lib/ClosedTabStorage";
 import ClosedWindowStorage from "~lib/ClosedWindowStorage";

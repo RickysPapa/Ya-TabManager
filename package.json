@@ -19,9 +19,12 @@
     "fuse.js": "^6.6.2",
     "localforage": "^1.10.0",
     "lodash": "^4.17.21",
+    "nanoid": "^4.0.2",
     "plasmo": "0.82.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "rxdb": "^14.15.1",
+    "rxjs": "^7.8.1",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
