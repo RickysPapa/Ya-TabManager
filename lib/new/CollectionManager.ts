@@ -1,11 +1,14 @@
 import StorageListener from '../StorageListener';
 import EventListener from '../EventListener';
-import { useBaseIdAndTimeStamp } from "~lib/utils";
+// import { useBaseIdAndTimeStamp } from "~lib/utils";
 import { localSet, localGet, addChromeListen } from '~/lib/utils';
 import { throttle, findIndex } from 'lodash';
-import dayjs from 'dayjs';
-import TMWindow from "~lib/TMWindow";
-import Tab from "~lib/TMTab";
+import RxDB from '../rxdb';
+import { nanoid } from 'nanoid';
+
+// import dayjs from 'dayjs';
+// import TMWindow from "~lib/TMWindow";
+// import Tab from "~lib/TMTab";
 
 const NOOP = () => {};
 
@@ -35,9 +38,9 @@ const CACHE_COLLECTIONS= 'COLLECTIONS';
 interface ICollectionCommon{
   id: string; // ts36
   type: 'rl' | 'bk'; // ReadLater / Bookmark
-  visits: number; // 访问次数
-  lastVisit: number; // 上一次访问时间（包括后台新增/删除）
-  cr: number;
+  visits?: number; // 访问次数
+  lastVisit?: number; // 上一次访问时间（包括后台新增/删除）
+  cr?: number;
 }
 
 export type ICollection = ICollectionCommon & {
@@ -45,19 +48,19 @@ export type ICollection = ICollectionCommon & {
 };
 
 export type ICollectionGroup = ICollectionCommon & {
-  cId: string; // 集合id
+  cid: string; // 集合id
   name: string;
-  count: number;  // 项目归属 ???
+  count?: number;  // 项目归属 ???
 }
 
 export type ICollectionItem = ICollectionCommon & {
-  cId: string;
-  cgId: string;
-  tag: string; // 标签 xx,xx
+  cid: string;
+  cgid?: string;
+  tags?: string; // 标签 xx,xx
   icon: string;
   title: string;
   url: string;
-  status: number; // 已读/未读
+  status?: number; // 已读/未读
 }
 
 interface IReadNote{
@@ -72,6 +75,35 @@ interface IReadNote{
 class CollectionManager {
   _collections = [];
   _readLater: [];
+
+  createDir(name){
+    RxDB.collectionDirs.insert({
+      id: nanoid(),
+      name,
+      type: 'bk'
+    })
+  }
+
+  createGroup(cid: string, name){
+    RxDB.collectionGroups.insert({
+      cid,
+      id: nanoid(),
+      name,
+      type: 'bk'
+    })
+  }
+
+  createItem(cid: string, data: Pick<ICollectionItem, 'title' | 'icon' | 'url'>, options: Pick<ICollectionItem, 'cgid' | 'tags' | 'type'>){
+    RxDB.collectionItems.insert({
+      id: nanoid(),
+      cid,
+      type: options.type || 'bk',
+      ...data,
+    })
+  }
+
+
+
   // 当前窗口列表(实时更新)
   _current: IWindow[] = [];
   // 已关闭(但用户未手动删除)的窗口列表
