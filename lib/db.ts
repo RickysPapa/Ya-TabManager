@@ -32,17 +32,17 @@ export class TMClassedDexie extends Dexie {
   // 'friends' is added by dexie when declaring the stores()
   // We just tell the typing system this is the case
   tabs!: Table<Tab>;
-  collections!: Table<ICollection>;
-  collectionGroups!: Table<ICollectionGroup>;
-  collectionItems!: Table<ICollectionItem>;
+  // collections!: Table<ICollection>;
+  // collectionGroups!: Table<ICollectionGroup>;
+  // collectionItems!: Table<ICollectionItem>;
 
   constructor() {
     super('tm');
     this.version(4).stores({
       tabs: 'id, wId, isClosed', // Primary key and indexed props
-      collections: 'id', // Primary key and indexed props
-      collectionGroups: 'id', // Primary key and indexed props
-      collectionItems: 'id, cId, cgId, type, status', // Primary key and indexed props
+      // collections: 'id', // Primary key and indexed props
+      // collectionGroups: 'id', // Primary key and indexed props
+      // collectionItems: 'id, cId, cgId, type, status', // Primary key and indexed props
     });
   }
 }

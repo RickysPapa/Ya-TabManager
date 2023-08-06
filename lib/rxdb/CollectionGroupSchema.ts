@@ -37,14 +37,14 @@ export default {
       "type": "number",
       "minimum": 1.68e12,
       "maximum": 2e12,
-      default: Date.now()
+      // default: Date.now() // 不能使用动态数据，schema 只支持静态 json
     },
     "cr": {
       "type": "number",
       "final": true,
       "minimum": 1.68e12,
       "maximum": 2e12,
-      default: Date.now()
+      // default: Date.now() // 不能使用动态数据，schema 只支持静态 json
     },
   },
   "required": [

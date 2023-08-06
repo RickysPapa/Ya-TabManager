@@ -4,6 +4,8 @@ import EventListener from '../EventListener';
 import { localSet, localGet, addChromeListen } from '~/lib/utils';
 import { throttle, findIndex } from 'lodash';
 import RxDB from '../rxdb';
+import type { IRxDB } from '../rxdb';
+
 import { nanoid } from 'nanoid';
 
 // import dayjs from 'dayjs';
@@ -16,7 +18,7 @@ interface IConstructor {
   onUpdate: (t: any) => any;
 }
 
-type TOnUpdate = (data: {current: chrome.windows.Window[], closed?: IWindow[] }) => void;
+type TOnUpdate = (data: { collections: ICollection[] }) => void;
 
 interface IInit {
   onUpdate?: TOnUpdate;
@@ -25,14 +27,6 @@ interface IInit {
   // windowsInfo?: IWindowsInfo;
 }
 
-interface IWindowInfo {
-  name?: string;
-  createAt?: number;
-  closed?: boolean;
-}
-
-export type IWindow = chrome.windows.Window & IWindowInfo;
-export type IWindowsInfo = Record<number, IWindowInfo>;
 const CACHE_COLLECTIONS= 'COLLECTIONS';
 
 interface ICollectionCommon{
@@ -73,81 +67,21 @@ interface IReadNote{
 // collections + 分组信息 列表存在 indexBB 但缓存在 storage 一份
 
 class CollectionManager {
+  __RxDB: IRxDB = null;
   _collections = [];
   _readLater: [];
-
-  createDir(name){
-    RxDB.collectionDirs.insert({
-      id: nanoid(),
-      name,
-      type: 'bk'
-    })
-  }
-
-  createGroup(cid: string, name){
-    RxDB.collectionGroups.insert({
-      cid,
-      id: nanoid(),
-      name,
-      type: 'bk'
-    })
-  }
-
-  createItem(cid: string, data: Pick<ICollectionItem, 'title' | 'icon' | 'url'>, options: Pick<ICollectionItem, 'cgid' | 'tags' | 'type'>){
-    RxDB.collectionItems.insert({
-      id: nanoid(),
-      cid,
-      type: options.type || 'bk',
-      ...data,
-    })
-  }
-
-
-
-  // 当前窗口列表(实时更新)
-  _current: IWindow[] = [];
-  // 已关闭(但用户未手动删除)的窗口列表
-  _closed: IWindow[] = [];
-  // 历史所有窗口信息（如果关闭的列表里，即可清除）
-  _lasted: Record<number, chrome.windows.Window> = [];
-  // 窗口的附加信息
-  _extInfo: IWindowsInfo = {};
   // 是否初始化
   __isInit: boolean = false;
   // 是否 worker 进程
   _isWorker: boolean = false;
-
   // 数据更新后的通知回调，由外部传入
-  onUpdate: TOnUpdate = NOOP;
+  onUpdate: TOnUpdate;
 
-
-  updateData = throttle(() => chrome.windows.getAll({populate: true}).then((windows) => {
-    console.log('func >>>', this._isWorker ? '后台进程' : '前台页面', windows, Date.now());
-    this._update(windows);
-    if(this._isWorker){
-      // 实时更新 windows 窗口缓存
-      windows.forEach((item) => {
-        this._lasted[item.id] = item;
-      })
-      localSet({[CACHE_WINDOWS]: this._lasted});
-    }
-  }), 1000)
-
-
-  // TODO 用 Zustand 管理状态？同时支持 hooks 和非 hooks
   constructor() {
     // 初始化数据
-    Promise.all([
-      chrome.windows.getAll({populate: true}),
-      localGet([CACHE_WINDOWS_EXT_INFO, CACHE_WINDOWS_CLOSED]),
-    ]).then(([windows, cache]) => {
-      this._extInfo = cache[CACHE_WINDOWS_EXT_INFO];
-      this._closed = cache[CACHE_WINDOWS_CLOSED];
-      this._update(windows);
-    });
   }
 
-  init({ onUpdate, isWorker }: IInit): void {
+  async init({ onUpdate, isWorker }: IInit): Promise<void>{
     if(this.__isInit){
       return;
     }
@@ -159,147 +93,137 @@ class CollectionManager {
       this._isWorker = isWorker;
     }
 
+    this.__RxDB = await RxDB();
+
+    // const readLaterCollection = await this.__RxDB.collection_dirs.findOne('readLater').exec();
+    this.__RxDB.collection_dirs.findOne('readLater').exec().then(res => {
+      if(!res){
+        this.__RxDB.collection_dirs.insert({
+          id: 'readLater',
+          name: 'ReadLater',
+          type: 'rl'
+        })
+      }
+    })
+
+    if(this.__RxDB){
+      this.getDirs().then(dirs => {
+        this._collections = dirs.map(dir => dir.toJSON());
+        console.log('all dirs >>', this._collections);
+        this._update();
+      });
+      this.__RxDB.collection_dirs.$.subscribe(changeEvent => console.dir(changeEvent));
+    }
+
     /**
      * =========== 业务初始化逻辑 ===========
      */
-
     // 业务配置了更新回调，初始化时马上调用响应业务
     if(this.onUpdate){
       this._update();
     }
 
-    if(this._isWorker){
-      // 初始化历史窗口数据
-      localGet(CACHE_WINDOWS).then((res) => {
-        // TODO 需要校验数据格式是否正确
-        if(res){
-          this._lasted = res;
-        }
-      });
-    }
-
-    // 用户自己关闭窗口，worker 会在后台更新缓存
-    // 前台：通过管理器关闭窗口要同步到后端
-    StorageListener.listen<IWindow[]>(CACHE_WINDOWS_CLOSED, (newValue) => {
-      this._closed = newValue;
-    });
-
-    // 后台：新建窗口时会初始化数据 如创建时间
-    // 前台：前台修改别名后更新缓存，用户直接关闭浏览器窗口需要保留别名信息
-    StorageListener.listen<IWindowsInfo>(CACHE_WINDOWS_EXT_INFO, (newValue) => {
-      this._extInfo = newValue;
-    });
-
-    /**
-     * 新窗口出现时需要增加窗口的附加信息  _isWorker=true生效
-     * @param win
-     */
-    const worker_onWindowCreated = (win) => {
-      this._updateExtInfo(win.id, {
-        createAt: Date.now(),
-        // name: dayjs().format('YYYY/MM/DD HH:mm'),
-        name: ''
-      });
-    };
-
-    /**
-     * 窗口关闭时要把窗口信息保存在关闭队列里
-     * @param id
-     */
-    const worker_onWindowsRemoved = (id) => {
-      console.log('worker_onWindowsRemoved >>', id);
-      if(this._lasted[id]){
-        this._closed.unshift({
-          ...(this._extInfo[id] || {}),
-          ...this._lasted[id],
-          closed: true
-        });
-      }
-      localSet({[CACHE_WINDOWS_CLOSED]: this._closed});
-    }
-
-    EventListener.listen<any>([
-      [chrome.windows.onCreated, this._isWorker ? worker_onWindowCreated : NOOP],
-      [chrome.windows.onRemoved, this._isWorker ? worker_onWindowsRemoved : NOOP],
-      chrome.tabs.onCreated,
-      chrome.tabs.onRemoved,
-      chrome.tabs.onUpdated,
-    ], () => {
-      this.updateData();
-    });
-  }
-
-  /**
-   * 用户手动更新窗口信息
-   * @param wid
-   * @param data
-   */
-  updateWindowInfo (wid: number, data: IWindowInfo) {
-    this._updateExtInfo(wid, data);
-  }
-
-  removeWindow(wid: number){
-    console.log('windowsManager removeWindow >>', wid);
-    if(findIndex(this._current, ['id', wid]) >= 0){
-      chrome.windows.remove(wid);
-    }else{
-      this._upsertClosed(wid);
+    if(!this._isWorker){
+      // TODO 监听来自worker的消息，更新数据
     }
   }
 
-  async _updateExtInfo(wid: number, data: IWindowInfo){
-    const isClosedWindow = findIndex(this._closed, ['id', wid]) > -1;
-    // const isRunningWindow = findIndex(this._current, ['id', wid]) > -1;
-    // 如果是新创建的窗口，不会立即出现在缓存中，所以如果缓存中米有则说明是新建
-    // const isExistWindow= this._lasted[wid];
-    console.log('_updateExtInfo[0] >>', wid, isClosedWindow);
-    if(isClosedWindow){
-      await this._upsertClosed(wid, data);
-    }else{
-      this._extInfo[wid] = {...this._extInfo[wid], ...data};
-      // const extInfo = await localGet(CACHE_WINDOWS_EXT_INFO);
-      // const latestExtInfo = Object.assign({}, this._extInfo)
-      // latestExtInfo[wid] = { ...latestExtInfo[wid], ...data }
-      console.log('_updateExtInfo[0] >>', this._extInfo);
-      this._update();
-      await localSet({[CACHE_WINDOWS_EXT_INFO]: this._extInfo})
+  _update(){
+    if(this.onUpdate){
+      this.onUpdate({
+        collections: this._collections
+      })
     }
   }
 
-  async _upsertClosed(wid, data?: IWindowInfo | IWindow){
-    // 因为前台和后台都会尽快更新历史（手动修改名称 | 关闭窗口自动触发）
-    // 所以这里保持从缓存中获取最新值，这个方法调用频率不高
-    // this._closed = await localGet(CACHE_WINDOWS_CLOSED);
-    const index = findIndex(this._closed, ['id', wid]);
-    if(index >= 0){
-      if(data){
-        this._closed[index] = { ...this._closed[index], ...data };
-      }else{
-        this._closed.splice(index, 1);
-      }
-    }else if(data){
-      this._closed.unshift(data as IWindow);
-    }
-    this._update();
-    await localSet({[CACHE_WINDOWS_CLOSED]: this._closed});
-  }
 
-  _update(windows = undefined){
-    if(!windows){
-      windows = this._current;
-    }
-    console.log('WindowManager _update >>');
-    this._current = windows.map((_) => {
-      return {
-        ..._,
-        ...(this._extInfo[_.id] || {})
-      };
+  async createDir(name){
+    return await this.__RxDB.collection_dirs.insert({
+      id: nanoid(),
+      name,
+      type: 'bk'
     })
-    this.onUpdate && this.onUpdate({current: this._current.concat(this._closed)});
+  }
+
+  async createGroup(cid: string, name){
+    return await this.__RxDB.collection_groups.insert({
+      cid,
+      id: nanoid(),
+      name,
+      type: 'bk'
+    })
+  }
+
+  async readLater(data: Pick<ICollectionItem, 'title' | 'icon' | 'url'> | Pick<ICollectionItem, 'title' | 'icon' | 'url'>[]){
+    await this.insertItem(data, {
+      cid: 'readLater',
+      type: 'rl',
+    })
+  }
+
+  async insertItem(
+    data: Pick<ICollectionItem, 'title' | 'icon' | 'url'> | Pick<ICollectionItem, 'title' | 'icon' | 'url'>[],
+    options: { cName?: string; cgName?: string } & Partial<Pick<ICollectionItem, 'cid' | 'cgid' | 'tags' | 'type'>>
+  ){
+    let _cid = options.cid, _cgid = options.cgid;
+    if(!_cid && options?.cName){
+      const cDocument = await this.createDir(options.cName);
+      _cid = cDocument.id;
+    }
+    if(!_cgid && options?.cgName){
+      const cgDocument = await this.createGroup(_cid, options.cgName);
+      _cgid = cgDocument.id;
+    }
+
+    if(!_cid){
+      throw Error('_cid is Missing');
+    }
+
+    const dataInCommon = { cid: _cid, cgid: _cgid, type: options.type || 'bk' }
+    if(Array.isArray(data)){
+      await this.__RxDB.collection_items.bulkInsert(data.map(_ => ({
+        id: nanoid(),
+        ...dataInCommon,
+        ..._,
+      })))
+    }else{
+      await this.__RxDB.collection_items.insert({
+        id: nanoid(),
+        ...dataInCommon,
+        ...data,
+      })
+    }
+  }
+
+  async getDirs(type: 'bk' | 'rl' = 'bk'){
+    return await this.__RxDB.collection_dirs.find({
+      selector: {
+        type
+      }
+    }).exec();
+  }
+
+  async getGroups(cid){
+    return await this.__RxDB.collection_groups.find({
+      selector: {
+        cid
+      }
+    }).exec();
+  }
+
+  async getItems({ cid, cgid }: { cid?: string; cgid?: string; }){
+    return await this.__RxDB.collection_items.find({
+      selector: {
+        cid,
+        cgid
+      },
+      sort: [{ up: 'desc' }]
+    }).exec();
   }
 }
 
-const wm = new WindowManager();
+const cm = new CollectionManager();
+export default cm;
 // const wm = new Proxy(new WindowManager({}), {
 //   set(target, propKey, value){
 //     console.log('proxy >>>', propKey, value);
@@ -319,4 +243,4 @@ const wm = new WindowManager();
 //   }, 0)
 // });
 
-export default wm;
+// export default wm;

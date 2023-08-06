@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
 import EventEmitter from 'eventemitter3';
 import WindowManager from '~/lib/new/WindowManager'
+import CollectionManager from '~/lib/new/CollectionManager'
 import LeftPanelItem from './components/left-panel-item';
 import type { IWindow } from '~/lib/new/WindowManager'
 import {db} from '../lib/db';
@@ -42,6 +43,10 @@ const SESSION_TYPE_LIST = {
   readLater: 'readLaterList'
 }
 
+const extractItemData = ({ title, url, favIconUrl }) => ({
+  title, url, icon: favIconUrl
+})
+
 
 
 const STORAGE_KEY = {
@@ -61,6 +66,8 @@ const IndexPopup = () => {
     // Total Data
     windows: [],
     windowsClosed: [],
+
+    collections: [],
 
     windowList: currentWindowWithDetail,
     savedSessionList: [],
@@ -95,6 +102,37 @@ const IndexPopup = () => {
   })
   // const [showImport, {toggle: toggleImportModal}] = useToggle(false);
   // const []
+
+  useEffect(() => {
+    WindowManager.init({
+      onUpdate: ({ current, closed }) => {
+        console.log('pupup >> WindowManager onUpdate', current, closed);
+        // setState({ windows: current, windowsClosed: closed, curSessionId: current?.[0].id });
+        setState({ windows: current, curSessionId: current?.[0].id });
+      }
+    });
+
+    // CollectionManager.init({
+    // });
+
+  }, [])
+
+  useAsyncEffect(async function*() {
+    const closeTabs = await localGet('$closed');
+    setState({
+      recentClosed: closeTabs
+    });
+
+    await CollectionManager.init({
+      onUpdate: ({ collections }) => {
+        setState({
+          collections
+        })
+      }
+    });
+  }, []);
+
+  console.log('collections >>>', state.collections);
 
 
   // const $windows = useSessionList({chromeStorageKey: '$window'});
@@ -253,24 +291,11 @@ const IndexPopup = () => {
   // console.log('currentState >>', state);
 
 
-  useAsyncEffect(async function*() {
-    const closeTabs = await localGet('$closed');
-    setState({
-      recentClosed: closeTabs
-    });
-  }, []);
 
 
   useEffect(() => {
     console.log('didMount >>', Date.now());
 
-    WindowManager.init({
-      onUpdate: ({ current, closed }) => {
-        console.log('pupup >> WindowManager onUpdate', current, closed);
-        // setState({ windows: current, windowsClosed: closed, curSessionId: current?.[0].id });
-        setState({ windows: current, curSessionId: current?.[0].id });
-      }
-    });
 
     chrome.tabs.onCreated.addListener((tab) => {
       // console.log('onCreated >>', tab);
@@ -339,9 +364,14 @@ const IndexPopup = () => {
 
   const saveToReadLater = async (close = false) => {
     const tabs = getSelectedTabs();
-    $readLater.addTabs('default', tabs.map(simplify));
+    await CollectionManager.readLater(tabs.map(_ => ({
+      title: _.title,
+      url: _.url,
+      icon: _.favIconUrl
+    })))
+    // $readLater.addTabs('default', tabs.map(simplify));
     if(close){
-      closeTabs();
+      // closeTabs();
     }else{
       TabSelect.unSelectAll();
     }
@@ -366,9 +396,11 @@ const IndexPopup = () => {
   const saveToSession = ({id = '', name = ''} = {}, { close = false } = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
-      SESSION_LIST['session'].addTabs(id, _tabs.map(simplify));
+      CollectionManager.insertItem(_tabs.map(extractItemData), { cid: id })
+      // SESSION_LIST['session'].addTabs(id, _tabs.map(simplify));
     }else{
-      SESSION_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
+      CollectionManager.insertItem(_tabs.map(extractItemData), { cName: name })
+      // SESSION_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
     }
     if(close){
       closeTabs();
@@ -545,11 +577,11 @@ const IndexPopup = () => {
             <p className="title">Sessions</p>
             <ul className="session-list">
               {/*{state.savedSessionList.map((session) => {*/}
-              {$sessions.list.map(( _session ) => {
+              {state.collections.map(( collection ) => {
                 return (
-                  <li key={_session.id} className="item" onClick={() => {
-                    setState({ curSessionType: 'session', curSessionId: _session.id })
-                  }}>{_session?.name || '未命名'}</li>
+                  <li key={collection.id} className="item" onClick={() => {
+                    setState({ curSessionType: 'session', curSessionId: collection.id })
+                  }}>{collection?.name || '未命名'}</li>
                 );
               })}
             </ul>
