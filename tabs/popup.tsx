@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, DOMElement, useCallback } from "r
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
 import EventEmitter from 'eventemitter3';
 import WindowManager from '~/lib/new/WindowManager'
+import TabManager from '~/lib/new/TabManager'
 import CollectionManager from '~/lib/new/CollectionManager'
 import LeftPanelItem from './components/left-panel-item';
 import type { IWindow } from '~/lib/new/WindowManager'
@@ -88,7 +89,7 @@ const IndexPopup = () => {
     // curShownTabs: [],
     // For User-Action
     // tabSelected: [],
-    recentClosed: {},
+    recentClosed: [],
     // domainList: null,
     curDomain: '',
   });
@@ -104,8 +105,6 @@ const IndexPopup = () => {
     open: false,
     success: false
   })
-  // const [showImport, {toggle: toggleImportModal}] = useToggle(false);
-  // const []
 
   useEffect(() => {
     WindowManager.init({
@@ -115,17 +114,13 @@ const IndexPopup = () => {
         setState({ windows: current, curSessionId: current?.[0].id });
       }
     });
-
-    // CollectionManager.init({
-    // });
-
   }, [])
 
   useAsyncEffect(async function*() {
-    const closeTabs = await localGet('$closed');
-    setState({
-      recentClosed: closeTabs
-    });
+    // const closeTabs = await localGet('$closed');
+    // setState({
+    //   recentClosed: closeTabs
+    // });
 
     await CollectionManager.init({
       onUpdate: ({ collections }) => {
@@ -134,6 +129,8 @@ const IndexPopup = () => {
         })
       }
     });
+
+    await TabManager.init({ isWorker: false });
   }, []);
 
   console.log('collections >>>', state.collections);
@@ -178,9 +175,25 @@ const IndexPopup = () => {
     })
   }, [$windows.list])
 
-  const curDir = useMemo(() => DIR_LIST[curSessionType][curSessionIndex], [
+  // 当前窗口数据
+  const curDir = useMemo(() => {
+    const _curDir = DIR_LIST[curSessionType][curSessionIndex];
+    return DIR_LIST[curSessionType][curSessionIndex];
+  }, [
     state.windows, state.collections, state.curSessionType, curSessionIndex
   ])
+
+  useEffect(() => {
+    if(curSessionType === 'WINDOW' && curDir?.id){
+      console.log('999999', curDir);
+      TabManager.getClosedTabs(curDir.id, (docs) => {
+        console.log('9999999', docs);
+        setState({
+          recentClosed: docs
+        })
+      });
+    }
+  }, [curSessionType, curDir?.id])
 
   const curTabs = useMemo(() => {
     let _curTabs = [];
@@ -306,8 +319,6 @@ const IndexPopup = () => {
   // console.log('currentState >>', state);
 
 
-
-
   useEffect(() => {
     console.log('didMount >>', Date.now());
 
@@ -353,12 +364,12 @@ const IndexPopup = () => {
     }catch (e){
     }
 
-    StorageListener.listen('$closed', (newValue) => {
-      console.log('storage.onChanged $closed >> ', newValue);
-      setState({
-        recentClosed: newValue
-      })
-    })
+    // StorageListener.listen('$closed', (newValue) => {
+    //   console.log('storage.onChanged $closed >> ', newValue);
+    //   setState({
+    //     recentClosed: newValue
+    //   })
+    // })
   }, [])
 
   // useKeyPress(() => true, (e) => {
@@ -684,7 +695,7 @@ const IndexPopup = () => {
                       }}
                     />
                     <div className="tab-title" onClick={() => {
-                      if(curSessionType === 'window'){
+                      if(curSessionType === 'WINDOW'){
                         chrome.tabs.update((tab as ChromeTab).id, {active: true})
                         chrome.windows.update((tab as ChromeTab).windowId, {focused: true})
                       }else{
@@ -700,25 +711,25 @@ const IndexPopup = () => {
               })}
             </ul>
             <ul className="history-list" >
-              {/*{(state.recentClosed[curDir.id] || []).map(tab => {*/}
-              {/*  return (*/}
-              {/*    <li key={tab.id} className="tab-item" >*/}
-              {/*      <span*/}
-              {/*        className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}*/}
-              {/*        onClick={(e) => {*/}
-              {/*          TabSelect.toggle(tab.id);*/}
-              {/*        }}*/}
-              {/*      />*/}
-              {/*      <div className="tab-title" onClick={() => {*/}
-              {/*        openTabs({tabs: [tab], active: true});*/}
-              {/*      }}>*/}
-              {/*        <img className="tab-favicon" src={tab.favIconUrl}/>*/}
-              {/*        <div className="tab-title-text" >{tab.title}</div>*/}
-              {/*        <button></button>*/}
-              {/*      </div>*/}
-              {/*    </li>*/}
-              {/*  );*/}
-              {/*})}*/}
+              {(state.recentClosed || []).map(tab => {
+                return (
+                  <li key={tab.id} className="tab-item" >
+                    <span
+                      className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
+                      onClick={(e) => {
+                        TabSelect.toggle(tab.id);
+                      }}
+                    />
+                    <div className="tab-title" onClick={() => {
+                      openTabs({tabs: [tab], active: true});
+                    }}>
+                      <img className="tab-favicon" src={tab.favIconUrl}/>
+                      <div className="tab-title-text" >{tab.title}</div>
+                      <button></button>
+                    </div>
+                  </li>
+                );
+              })}
               <li>Show More</li>
             </ul>
           </div>
