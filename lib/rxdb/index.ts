@@ -67,7 +67,11 @@ class RxDB {
       },
       tab_history: {
         schema: TabHistorySchema,
-        migrationStrategies
+        migrationStrategies: Object.assign({}, migrationStrategies, {
+          2: function(oldDoc){
+            return oldDoc;
+          }
+        })
       }
     })
 
@@ -99,12 +103,18 @@ class RxDB {
     }, false);
 
     db.tab_history.preSave(function(plainData, rxDocument){
-      console.log('tab_history preSave2 >>');
-      console.log('tab_history preSave cr2 >>', rxDocument, plainData);
-      // if(rxDocument.cr){
-      //   plainData.cr = rxDocument.cr;
-      // }
-      console.log('tab_history preSave plainData >>', plainData);
+      // console.log('tab_history preSave2 >>');
+      // console.log('tab_history preSave cr2 >>', rxDocument, plainData);
+      const compareKey = ['icon', 'title', 'url', 'wId', 'position'];
+      // 有更新使用最新的 up 值
+      if(JSON.stringify(plainData, compareKey) !== JSON.stringify(rxDocument, compareKey)){
+        plainData.cr = rxDocument.cr;
+      }else{
+        // 无更新使用旧值
+        plainData.cr = rxDocument.cr;
+        plainData.up = rxDocument.up;
+      }
+      // console.log('tab_history preSave plainData >>', plainData);
       // plainData.cr
       // modify anyField before saving
       // plainData.anyField = 'anyValue';

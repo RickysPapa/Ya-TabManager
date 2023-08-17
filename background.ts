@@ -24,7 +24,7 @@ WindowManager.init({ isWorker: true });
     _windowList.forEach((_w) => {
       // TODO 每次 worker 启动都会执行会太资源，使用时间戳减少更新量
       console.log('init getAll sasve>>>', _w.tabs.map(Tab.simplify));
-      TabManager.bulkUpsert(_w.tabs.map(Tab.simplify).filter(_ => _.id === '1173823713'))
+      TabManager.bulkUpsert(_w.tabs.map(Tab.simplify));
     })
   })
 })();
@@ -58,7 +58,7 @@ const windowList = [];
 
 const globalQueue = [];
 function callbackWrapper(func) {
-  return function(...args){
+  return (...args) => {
     if(TabManager.isInit){
       if(globalQueue.length){
         let item;
@@ -84,9 +84,14 @@ chrome.windows.onCreated.addListener(callbackWrapper((window) => {
   windowKV[window.id] = instance;
 }))
 
+
 chrome.windows.onRemoved.addListener(callbackWrapper((windowId) => {
   console.log('$bg windows.onRemoved', windowId);
 }));
+
+chrome.tabs.onDetached.addListener(() => {
+
+});
 
 chrome.tabs.onCreated.addListener(callbackWrapper((tab) => {
   console.log('$bg onCreated', tab);
@@ -94,7 +99,7 @@ chrome.tabs.onCreated.addListener(callbackWrapper((tab) => {
   TabManager.insert(Tab.simplify(tab));
 }));
 
-chrome.tabs.onUpdated.addListener(callbackWrapper((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(callbackWrapper((tabId, changeInfo: chrome.tabs.TabChangeInfo, tab) => {
   console.log('$bg onUpdated >>', tabId, changeInfo, tab);
   if(changeInfo.status !== 'complete'){
     TabManager.update(Tab.simplify(tab));
@@ -111,23 +116,27 @@ function getWindowInstance(wId){
 }
 
 chrome.tabs.onRemoved.addListener(callbackWrapper(async (tabId, removeInfo) => {
+  console.log('$bg onRemoved', tabId, removeInfo);
   TabManager.update({
     id: tabId,
     status: 1
   });
-  // const tabInfo = await db.tabs.get(tabId);
-  // console.log('$bg onRemoved >>', removeInfo, tabInfo);
-  // if(removeInfo.isWindowClosing){
-  //   ClosedWindowStorage.unshift(tabInfo);
-  // }else if(tabInfo){
-  //   tabInfo.isClosed = 1;
-  //   ClosedTabStorage.unshift(tabInfo);
-  //   // await db.tabs.put(tabInfo, tabId);
-  // }
 }));
 
 chrome.tabs.onAttached.addListener((tabId, attachInfo) => {
   console.log('$bg onAttached', tabId, attachInfo);
+  TabManager.update({
+    id: tabId,
+    position: attachInfo.newPosition,
+    wId: attachInfo.newWindowId
+  });
+})
+
+chrome.tabs.onMoved.addListener((tabId, moveInfo) => {
+  TabManager.update({
+    id: tabId,
+    position: moveInfo.toIndex
+  })
 })
 
 

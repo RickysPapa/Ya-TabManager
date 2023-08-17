@@ -1,7 +1,7 @@
 
 export default {
   "title": "TabHistory",
-  "version": 1,
+  "version": 2,
   "primaryKey": "id",
   "type": "object",
   "properties": {
@@ -11,7 +11,7 @@ export default {
     },
     "wId": {
       "type": "number",
-      "max": 9e9
+      "maximum": 9e9
     },
     "title": {
       "type": "string",
@@ -25,6 +25,10 @@ export default {
     "url": {
       "type": "string",
       "maxLength": 512
+    },
+    position: {
+      type: "number",
+      maximum: 999
     },
     status: {
       type: "number",

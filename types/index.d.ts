@@ -26,15 +26,19 @@ declare global{
   }
 
   interface ITab {
-    id: number;
+    id: string | number;
     wId?: number;
+    position: number;
     icon: string;
     title: string;
     url: string;
     cr: number;
     up: number;
     isClosed?: number;
+    status: number;
   }
+
+
 
 }
 
@@ -47,16 +51,6 @@ interface SessionTab {
   ts: number;
 }
 
-interface YATab {
-  id: number;
-  wId?: number;
-  favIconUrl: string;
-  title: string;
-  url: string;
-  cr: number;
-  up: number;
-  isClosed?: number;
-}
 
 interface Session<T> {
   id: string;

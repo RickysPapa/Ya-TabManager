@@ -141,7 +141,7 @@ class WindowManager {
      */
     const worker_onWindowsRemoved = (id) => {
       console.log('worker_onWindowsRemoved >>', id);
-      if(this._lasted[id]){
+      if(this._lasted[id] && this._lasted[id].tabs.length > 1){
         this._closed.unshift({
           ...(this._extInfo[id] || {}),
           ...this._lasted[id],

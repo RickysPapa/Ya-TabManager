@@ -6,6 +6,7 @@ export function simplify(tab: ChromeTab): YATab{
     title: tab.title,
     url: tab.url,
     icon: tab.favIconUrl,
+    position: tab.index,
     cr: Date.now(),
     up: Date.now(),
     status: 0,
