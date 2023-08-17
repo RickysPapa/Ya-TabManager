@@ -12,6 +12,10 @@ import { nanoid } from 'nanoid';
 // import TMWindow from "~lib/TMWindow";
 // import Tab from "~lib/TMTab";
 
+const filterQueryParams = (obj) => {
+
+}
+
 const NOOP = () => {};
 
 interface IConstructor {
@@ -93,7 +97,7 @@ class CollectionManager {
       this._isWorker = isWorker;
     }
 
-    this.__RxDB = await RxDB();
+    this.__RxDB = await RxDB.getInstance();
 
     // const readLaterCollection = await this.__RxDB.collection_dirs.findOne('readLater').exec();
     this.__RxDB.collection_dirs.findOne('readLater').exec().then(res => {
@@ -211,14 +215,36 @@ class CollectionManager {
     }).exec();
   }
 
-  async getItems({ cid, cgid }: { cid?: string; cgid?: string; }){
+  async getItems({ cid, cgid }: { cid?: string; cgid?: string; }): Promise<ICollectionItem[]>{
+    console.log('getItems >>', {cid, cgid});
     return await this.__RxDB.collection_items.find({
       selector: {
         cid,
-        cgid
       },
-      sort: [{ up: 'desc' }]
-    }).exec();
+      sort: [{ cr: 'desc' }]
+    })
+      .exec()
+      .then(list => list.map(_ => _.toJSON()));
+  }
+
+  async ensureCollectionData(cid){
+    const [_groups, _items] = await Promise.all([
+      this.getGroups({cid}),
+      this.getItems({cid})
+    ]);
+
+    this._collections = this._collections.map(_ => {
+      if(_.id === cid){
+        return {
+          ..._,
+          groups: _groups,
+          items: _items
+        }
+      }
+      return _;
+    })
+
+    this._update();
   }
 }
 

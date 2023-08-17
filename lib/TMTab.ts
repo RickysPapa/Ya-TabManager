@@ -1,14 +1,14 @@
 
 export function simplify(tab: ChromeTab): YATab{
   return {
-    id: tab.id,
+    id: tab.id.toString(),
     wId: tab.windowId,
     title: tab.title,
     url: tab.url,
-    favIconUrl: tab.favIconUrl,
+    icon: tab.favIconUrl,
     cr: Date.now(),
     up: Date.now(),
-    isClosed: 0,
+    status: 0,
   };
 }
 

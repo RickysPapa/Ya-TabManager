@@ -1,6 +1,6 @@
 export default {
   "title": "CollectionGroups",
-  "version": 0,
+  "version": 1,
   "description": "describes a simple hero",
   "primaryKey": "id",
   "type": "object",
@@ -41,7 +41,7 @@ export default {
     },
     "cr": {
       "type": "number",
-      "final": true,
+      // "final": true,
       "minimum": 1.68e12,
       "maximum": 2e12,
       // default: Date.now() // 不能使用动态数据，schema 只支持静态 json

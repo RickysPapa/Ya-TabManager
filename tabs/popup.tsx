@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, DOMElement } from "react";
+import { useEffect, useState, useMemo, useRef, DOMElement, useCallback } from "react";
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
 import EventEmitter from 'eventemitter3';
 import WindowManager from '~/lib/new/WindowManager'
@@ -69,18 +69,22 @@ const IndexPopup = () => {
 
     collections: [],
 
+    currentListType: '',
+    curSessionIndex: 0,
+    currentList: [],
+
     windowList: currentWindowWithDetail,
     savedSessionList: [],
     readLaterList: [],
     // For current data
-    curSessionType: 'window',
+    curSessionType: 'WINDOW',
     curSessionId: 0,
 
     shouldGroupByDomain: false,
     showDuplicateTabs: false,
     showSearchResult: false,
     searchResult: [],
-    // curSessionTabs: [],
+    // curTabs: [],
     // curShownTabs: [],
     // For User-Action
     // tabSelected: [],
@@ -89,7 +93,7 @@ const IndexPopup = () => {
     curDomain: '',
   });
 
-  const {curSessionType, curSessionId} = state;
+  const {curSessionType, curSessionId, curSessionIndex} = state;
   const [form] = Form.useForm();
   const [modalShow, {toggle: toggleModelShow}] = useToggle(false);
   const [showHistory, {toggle: toggleHistory}] = useToggle(false);
@@ -151,9 +155,10 @@ const IndexPopup = () => {
   // console.log('state.closeTabs >>', state.recentClosed);
   // console.log('$readLater >>', $readLater);
 
-  const SESSION_LIST = {
+  const DIR_LIST = {
     // session: $sessions,
-    window: state.windows,
+    WINDOW: state.windows,
+    COLLECTION: state.collections,
     // readLater: $readLater
   }
 
@@ -173,11 +178,21 @@ const IndexPopup = () => {
     })
   }, [$windows.list])
 
-  const curSessionTabs = useMemo(() => {
-    // const _curSessionTabs = SESSION_LIST?.[curSessionType].getTabs(curSessionId);
-    const _curSessionTabs = SESSION_LIST[curSessionType].find(_ => _.id === curSessionId)?.tabs || [];
-    return (_curSessionTabs as $Tab[]).filter(_ => !removedMapApi.get(_.id));
-  }, [state.curSessionType, state.curSessionId, removedMap, $windows.list])
+  const curDir = useMemo(() => DIR_LIST[curSessionType][curSessionIndex], [
+    state.windows, state.collections, state.curSessionType, curSessionIndex
+  ])
+
+  const curTabs = useMemo(() => {
+    let _curTabs = [];
+    if(curDir){
+      if(curSessionType === 'WINDOW'){
+        _curTabs = curDir.tabs;
+      }else {
+        _curTabs = curDir.items;
+      }
+    }
+    return (_curTabs || []).filter(_ => !removedMapApi.get(_.id));
+  }, [state.windows, state.curSessionType, curSessionIndex, removedMap, $windows.list])
 
 
   useEffect(() => {
@@ -185,11 +200,11 @@ const IndexPopup = () => {
     setState({
       showDuplicateTabs: false
     })
-  }, [state.curSessionType, state.curSessionId])
+  }, [state.curSessionType, state.curSessionIndex])
 
   useEffect(() => {
     TabSelect.setSelected([]);
-  }, [state.curSessionType, state.curSessionId, state.curDomain])
+  }, [state.curSessionType, state.curSessionIndex, state.curDomain])
 
 
   const domainList = useMemo(() => {
@@ -200,7 +215,7 @@ const IndexPopup = () => {
       return [];
     }
 
-    const tabsGroupByDomain: {[key: string]: any[]} = curSessionTabs.reduce((acc, cur) => {
+    const tabsGroupByDomain: {[key: string]: any[]} = curTabs.reduce((acc, cur) => {
       const _url = new URL(cur.url);
       if(!acc[_url.hostname]){
         acc[_url.hostname] = [];
@@ -234,11 +249,11 @@ const IndexPopup = () => {
       }, []);
 
     return _domainList.slice(0, 1).concat(_domainList.slice(1).reverse());
-  }, [curSessionTabs, state.shouldGroupByDomain])
+  }, [curTabs, state.shouldGroupByDomain])
 
   const [duplicateList, preferDuplicateIds] = useMemo(() => {
     if(!state.showDuplicateTabs) return [[], []];
-    const _urlCount = curSessionTabs.reduce((acc, cur) => {
+    const _urlCount = curTabs.reduce((acc, cur) => {
       if(!acc[cur.url]){
         acc[cur.url] = [];
       }
@@ -256,7 +271,7 @@ const IndexPopup = () => {
       });
 
     return [_duplicateList, _selectedIds];
-  }, [state.showDuplicateTabs, curSessionType, curSessionId, curSessionTabs]);
+  }, [state.showDuplicateTabs, curSessionType, curSessionIndex, curTabs]);
 
   useEffect(() => {
     if(state.showDuplicateTabs){
@@ -269,7 +284,7 @@ const IndexPopup = () => {
   }, [domainList.length, state.curDomain])
 
   const { curShownTabs, curShownTabIds } = useMemo(() => {
-    let _curShownTabs = curSessionTabs;
+    let _curShownTabs = curTabs;
     if(state.shouldGroupByDomain && domainList){
       _curShownTabs = domainList?.find(_ => _.domain === curDomain)?.tabs || [];
     }
@@ -283,7 +298,7 @@ const IndexPopup = () => {
       curShownTabs: _curShownTabs,
       curShownTabIds: _curShownTabs.map(_ => _.id)
     };
-  }, [curSessionTabs, curDomain, state.showDuplicateTabs, state.searchResult, state.showSearchResult])
+  }, [curTabs, curDomain, state.showDuplicateTabs, state.searchResult, state.showSearchResult])
 
   const TabSelect = useSelections<number | string>(curShownTabIds);
 
@@ -397,10 +412,10 @@ const IndexPopup = () => {
     const _tabs = getSelectedTabs();
     if(id){
       CollectionManager.insertItem(_tabs.map(extractItemData), { cid: id })
-      // SESSION_LIST['session'].addTabs(id, _tabs.map(simplify));
+      // DIR_LIST['session'].addTabs(id, _tabs.map(simplify));
     }else{
       CollectionManager.insertItem(_tabs.map(extractItemData), { cName: name })
-      // SESSION_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
+      // DIR_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
     }
     if(close){
       closeTabs();
@@ -410,16 +425,16 @@ const IndexPopup = () => {
   }
 
   function _getCurSessionInstance(){
-    return SESSION_LIST[curSessionType];
+    return DIR_LIST[curSessionType];
   }
 
   // function __getCurSessionTabs(){
-  //   return SESSION_LIST[curSessionType].kv[curSessionId].tabs;
+  //   return DIR_LIST[curSessionType].kv[curSessionId].tabs;
   // }
 
 
   function deleteSavedTab(){
-    SESSION_LIST[curSessionType].removeTabs(curSessionId, TabSelect.selected);
+    DIR_LIST[curSessionType].removeTabs(curSessionId, TabSelect.selected);
     TabSelect.selected.forEach((_) => {
       removedMapApi.set(_, true)
     })
@@ -497,6 +512,26 @@ const IndexPopup = () => {
   console.log('render >>', Date.now() - _startTime, curShownTabs);
   // return (<div>111</div>);
 
+  const switchList = useCallback((sType, targetIndex: number) => {
+    if(sType === 'COLLECTION'){
+      const _tIndex = state.collections.length > targetIndex ? targetIndex : 0;
+      const _dir = state.collections[_tIndex];
+      CollectionManager.ensureCollectionData(_dir.id).then(() => {
+        setState({
+          curSessionType: sType,
+          curSessionIndex: _tIndex,
+        })
+      })
+    }else{
+      const _tIndex = state.windows.length > targetIndex ? targetIndex : 0;
+      // const _dir = state.collections[_tId];
+      setState({
+        curSessionType: sType,
+        curSessionIndex: _tIndex,
+      })
+    }
+  }, [state.collections, state.windows, curSessionIndex])
+
   return (
     <div className="popup" >
       <div>
@@ -532,57 +567,33 @@ const IndexPopup = () => {
           <div className="section">
             <p className="title">Windows</p>
             <ul className="list">
-              {/*{state.windowList.map((window) => {*/}
-              {state.windows.map((item) => {
+              {state.windows.map((item, wIndex) => {
                 return <LeftPanelItem
+                  active={wIndex === curSessionIndex}
                   key={item.id}
                   data={item}
-                  onClick={() => {
-                    setState({
-                      curSessionId: item.id,
-                      curSessionType: 'window',
-                    })
-                  }}
+                  onClick={switchList.bind(null, 'WINDOW', wIndex)}
                   remove={() => WindowManager.removeWindow(item.id)}
                   updateInfo={(data) => {
                     WindowManager.updateWindowInfo(item.id, data)
                   }}
                 />
-                // return (
-                //   <li key={id} className="window-item" onClick={() => {
-                //     setState({
-                //       curSessionId: id,
-                //       curSessionType: 'window',
-                //     })
-                //   }}>
-                //     {closed === true
-                //       ? (<span className="item-status item-status-closed" />)
-                //       : (<span className="item-status item-status-opening" />)
-                //     }
-                //     <span>{name || id}</span>
-                //     <input />
-                //     <div className="window-item-options" >
-                //       <span className={`iconfont icon-edit`} onClick={() => {}} />
-                //       <span className={`iconfont icon-close`} />
-                //     </div>
-                //   </li>
-                // );
               })}
             </ul>
           </div>
           <div className="section">
-            <p className="title" onClick={() =>{ setState({ curSessionType: 'readLater', curSessionId: 'default'}) }} >Read Later</p>
+            <p className="title" onClick={() =>{ setState({ curSessionType: 'READ_LATER', curSessionId: 'default'}) }} >Read Later</p>
           </div>
           <div className="section">
-            <p className="title">Sessions</p>
+            <p className="title">收藏夹</p>
             <ul className="session-list">
-              {/*{state.savedSessionList.map((session) => {*/}
-              {state.collections.map(( collection ) => {
-                return (
-                  <li key={collection.id} className="item" onClick={() => {
-                    setState({ curSessionType: 'session', curSessionId: collection.id })
-                  }}>{collection?.name || '未命名'}</li>
-                );
+              {state.collections.map(( collection, cIndex ) => {
+                return <LeftPanelItem
+                  active={cIndex === curSessionIndex}
+                  key={collection.id}
+                  data={collection}
+                  onClick={switchList.bind(null, 'COLLECTION', cIndex)}
+                />
               })}
             </ul>
           </div>
@@ -680,7 +691,7 @@ const IndexPopup = () => {
                         openTabs({tabs: [tab], active: true});
                       }
                     }}>
-                      <img className="tab-favicon" src={tab.favIconUrl}/>
+                      <img className="tab-favicon" src={tab.icon}/>
                       <div className="tab-title-text" >{tab.title}</div>
                       <button></button>
                     </div>
@@ -689,25 +700,25 @@ const IndexPopup = () => {
               })}
             </ul>
             <ul className="history-list" >
-              {(state.recentClosed[curSessionId] || []).map(tab => {
-                return (
-                  <li key={tab.id} className="tab-item" >
-                    <span
-                      className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}
-                      onClick={(e) => {
-                        TabSelect.toggle(tab.id);
-                      }}
-                    />
-                    <div className="tab-title" onClick={() => {
-                      openTabs({tabs: [tab], active: true});
-                    }}>
-                      <img className="tab-favicon" src={tab.favIconUrl}/>
-                      <div className="tab-title-text" >{tab.title}</div>
-                      <button></button>
-                    </div>
-                  </li>
-                );
-              })}
+              {/*{(state.recentClosed[curDir.id] || []).map(tab => {*/}
+              {/*  return (*/}
+              {/*    <li key={tab.id} className="tab-item" >*/}
+              {/*      <span*/}
+              {/*        className={`tab-checkbox iconfont ${TabSelect.isSelected(tab.id) ? 'icon-yigouxuan' : 'icon-weigouxuan'}`}*/}
+              {/*        onClick={(e) => {*/}
+              {/*          TabSelect.toggle(tab.id);*/}
+              {/*        }}*/}
+              {/*      />*/}
+              {/*      <div className="tab-title" onClick={() => {*/}
+              {/*        openTabs({tabs: [tab], active: true});*/}
+              {/*      }}>*/}
+              {/*        <img className="tab-favicon" src={tab.favIconUrl}/>*/}
+              {/*        <div className="tab-title-text" >{tab.title}</div>*/}
+              {/*        <button></button>*/}
+              {/*      </div>*/}
+              {/*    </li>*/}
+              {/*  );*/}
+              {/*})}*/}
               <li>Show More</li>
             </ul>
           </div>

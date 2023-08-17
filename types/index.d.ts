@@ -1,23 +1,41 @@
 import type { IWindow } from "~lib/new/WindowManager";
+import type { ICollectionItem } from "~lib/new/CollectionManager";
+export {};
+declare global{
+  interface ManagerState{
+    windows: IWindow[];
+    windowList: chrome.windows.Window[];
+    savedSessionList: any[];
+    readLaterList: any[],
 
-interface ManagerState{
-  windows: IWindow[];
-  windowList: chrome.windows.Window[];
-  savedSessionList: any[];
-  readLaterList: any[],
+    currentList: ICollectionItem[],
+    // curSessionTabs: chrome.tabs.Tab[];  // all tabs in current session
+    // curShownTabs: chrome.tabs.Tab[]; // tabs shown in current List
+    curSessionType: 'WINDOW' | 'COLLECTION' | 'READ_LATER'
+    curSessionId: number | string; // id associated with `curSessionType`
+    curSessionIndex: number;
 
-  // curSessionTabs: chrome.tabs.Tab[];  // all tabs in current session
-  // curShownTabs: chrome.tabs.Tab[]; // tabs shown in current List
-  curSessionType: 'session' | 'window' | 'readLater'
-  curSessionId: number | string; // id associated with `curSessionType`
 
-  showDuplicateTabs: boolean;
-  shouldGroupByDomain: boolean;
-  showSearchResult: boolean;
-  searchResult: any[];
-  curDomain: string;
-  recentClosed: any;
-  // [key: string]: any;
+    showDuplicateTabs: boolean;
+    shouldGroupByDomain: boolean;
+    showSearchResult: boolean;
+    searchResult: any[];
+    curDomain: string;
+    recentClosed: any;
+    [key: string]: any;
+  }
+
+  interface ITab {
+    id: number;
+    wId?: number;
+    icon: string;
+    title: string;
+    url: string;
+    cr: number;
+    up: number;
+    isClosed?: number;
+  }
+
 }
 
 
