@@ -115,4 +115,55 @@ class TabManager{
   }
 }
 
-export default new TabManager()
+
+const globalQueue = [];
+function callbackWrapper(func) {
+  return (...args) => {
+    if(TabManager.isInit){
+      if(globalQueue.length){
+        let item;
+        while (item = globalQueue.shift()){
+          item.func.apply(null, ...item.args)
+        }
+      }
+      func.apply(null, args);
+    }else{
+      globalQueue.push({func, args});
+    }
+  }
+}
+
+
+const _tm = new TabManager();
+const tm = new Proxy(_tm, {
+  get(target, propKey){
+    // console.log('proxy >>>', propKey, value);
+    if(propKey === 'init'){
+      return function(...args){
+        console.log('proxy log >>>', target[propKey]);
+        target[propKey].apply(target, args).then(() => {
+          console.log('while >>>>', globalQueue.length);
+          if(globalQueue.length){
+            let item;
+            while (item = globalQueue.shift()){
+              console.log(item.func, target, item.args);
+              item.func.apply(target, item.args)
+            }
+          }
+        });
+      }
+    }else{
+      return function(...args){
+        globalQueue.push({ func: target[propKey], args});
+        // if(target[propKey].constructor.name === 'AsyncFunction'){
+          // TODO 如果是异步可能要返回 Promise，否则外部 then 会报错
+        // }
+      }
+    }
+    return true;
+  },
+
+});
+
+
+export default tm;
