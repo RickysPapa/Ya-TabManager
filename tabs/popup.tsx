@@ -484,8 +484,10 @@ const IndexPopup = () => {
       if(newWindow){
         let _targetWindowId = null;
         function _onUpdated(_tabId, changeInfo, tab){
+          console.log('popup _onUpdated >>>');
           if(changeInfo.title && _targetWindowId && tab.windowId === _targetWindowId && tab.index !== 0){
-            console.log(JSON.stringify(changeInfo));
+            console.log('popup _onUpdated >>> discard' + _tabId);
+            // console.log(JSON.stringify(changeInfo));
             chrome.tabs.discard(_tabId);
           }
         }
@@ -495,6 +497,7 @@ const IndexPopup = () => {
           url: _tabs.map(_ => _.url)
         }).then((_window) => {
           _targetWindowId = _window.id;
+          TabManager.moveClosedTabs(_tabs?.[0]?.windowId, _targetWindowId);
           setTimeout(() => {
             chrome.tabs.onUpdated.removeListener(_onUpdated);
           }, 3000)
@@ -584,6 +587,12 @@ const IndexPopup = () => {
                   key={item.id}
                   data={item}
                   onClick={switchList.bind(null, 'WINDOW', wIndex)}
+                  onDoubleClick={() => {
+                    if(item.closed){
+                      openTabs({ tabs: item.tabs, newWindow: true});
+                      WindowManager.removeWindow(item.id);
+                    }
+                  }}
                   remove={() => WindowManager.removeWindow(item.id)}
                   updateInfo={(data) => {
                     WindowManager.updateWindowInfo(item.id, data)

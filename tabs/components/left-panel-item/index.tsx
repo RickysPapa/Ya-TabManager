@@ -12,11 +12,12 @@ interface ILeftPanelItemProps {
   active: boolean;
   data: IWindow;
   onClick?: MouseEventHandler;
+  onDoubleClick?: MouseEventHandler;
   updateInfo?: Function;
   remove?: MouseEventHandler;
 }
 
-export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP, remove = NOOP, active = false }: ILeftPanelItemProps){
+export default function LeftPanelItem({ data, onClick = NOOP, onDoubleClick = NOOP, updateInfo = NOOP, remove = NOOP, active = false }: ILeftPanelItemProps){
   if(!data){
     console.log('LeftPanelItem >>', data);
     return null;
@@ -49,7 +50,10 @@ export default function LeftPanelItem({ data, onClick = NOOP, updateInfo = NOOP,
           }}
         />
       ) : (
-        <span style={{ fontWeight: active ? 'bold' : 'normal' }} >{alias || dayjs(createAt).format('YYYY/MM/DD HH:mm') || id}</span>
+        <span
+          style={{ fontWeight: active ? 'bold' : 'normal' }}
+          onDoubleClick={onDoubleClick}
+        >{alias || dayjs(createAt).format('YYYY/MM/DD HH:mm') || id}</span>
       )}
       <div className="window-item-options" >
         <span className={`iconfont icon-edit`} onClick={setTrue} />

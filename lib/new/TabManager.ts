@@ -54,6 +54,9 @@ class TabManager{
     if(item.id){
       item.id = typeof item.id === 'number' ? item.id.toString() : item.id;
       const doc = await this.__tabHistory.findOne(item.id).exec();
+      if(!doc){
+        console.error('doc not exist! >>>', doc);
+      }
       await doc.incrementalPatch(item);
       // if(item.hasOwnProperty('status')){
       // }
@@ -82,7 +85,7 @@ class TabManager{
       ]
     })
 
-    this.__tabHistory._queryCache._map.clear();
+    // this.__tabHistory._queryCache._map.clear();
 
     if(this.__closedSubscriber){
       if(wId){
@@ -95,6 +98,20 @@ class TabManager{
         }, 300)
       }
     }
+  }
+
+  async moveClosedTabs(fromWId, toWId){
+    const query = this.__tabHistory.find({
+      selector: {
+        wId: fromWId,
+        status: 1
+      },
+    })
+    await query.update({
+      $set: {
+        wId: toWId
+      }
+    });
   }
 }
 

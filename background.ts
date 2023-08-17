@@ -63,7 +63,7 @@ function callbackWrapper(func) {
       if(globalQueue.length){
         let item;
         while (item = globalQueue.shift()){
-          item.func.applly(null, ...item.args)
+          item.func.apply(null, ...item.args)
         }
       }
       func.apply(null, args);
@@ -117,10 +117,12 @@ function getWindowInstance(wId){
 
 chrome.tabs.onRemoved.addListener(callbackWrapper(async (tabId, removeInfo) => {
   console.log('$bg onRemoved', tabId, removeInfo);
-  TabManager.update({
-    id: tabId,
-    status: 1
-  });
+  if(!removeInfo.isWindowClosing){
+    TabManager.update({
+      id: tabId,
+      status: 1
+    });
+  }
 }));
 
 chrome.tabs.onAttached.addListener((tabId, attachInfo) => {

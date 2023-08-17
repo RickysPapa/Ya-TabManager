@@ -171,6 +171,10 @@ class WindowManager {
     this._updateExtInfo(wid, data);
   }
 
+  /**
+   * 用户手动删除窗口
+   * @param wid
+   */
   removeWindow(wid: number){
     console.log('windowsManager removeWindow >>', wid);
     if(findIndex(this._current, ['id', wid]) >= 0){
