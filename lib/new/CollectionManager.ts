@@ -22,7 +22,7 @@ interface IConstructor {
   onUpdate: (t: any) => any;
 }
 
-type TOnUpdate = (data: { collections: ICollection[] }) => void;
+type TOnUpdate = (data: { collections: ICollection[], readLater: ICollection[] }) => void;
 
 interface IInit {
   onUpdate?: TOnUpdate;
@@ -73,7 +73,7 @@ interface IReadNote{
 class CollectionManager {
   __RxDB: IRxDB = null;
   _collections = [];
-  _readLater: [];
+  _readLater = [];
   // 是否初始化
   __isInit: boolean = false;
   // 是否 worker 进程
@@ -100,6 +100,7 @@ class CollectionManager {
     this.__RxDB = await RxDB.getInstance();
 
     // const readLaterCollection = await this.__RxDB.collection_dirs.findOne('readLater').exec();
+    // TODO 可以放在 background
     this.__RxDB.collection_dirs.findOne('readLater').exec().then(res => {
       if(!res){
         this.__RxDB.collection_dirs.insert({
@@ -116,7 +117,7 @@ class CollectionManager {
         console.log('all dirs >>', this._collections);
         this._update();
       });
-      this.__RxDB.collection_dirs.$.subscribe(changeEvent => console.dir(changeEvent));
+      // this.__RxDB.collection_dirs.$.subscribe(changeEvent => console.dir(changeEvent));
     }
 
     /**
@@ -135,7 +136,8 @@ class CollectionManager {
   _update(){
     if(this.onUpdate){
       this.onUpdate({
-        collections: this._collections
+        collections: this._collections,
+        readLater: this._readLater,
       })
     }
   }
@@ -233,16 +235,23 @@ class CollectionManager {
       this.getItems({cid})
     ]);
 
-    this._collections = this._collections.map(_ => {
-      if(_.id === cid){
-        return {
-          ..._,
-          groups: _groups,
-          items: _items
+    if(cid === 'readLater'){
+      this._readLater = [{
+        groups: _groups,
+        items: _items
+      }];
+    }else{
+      this._collections = this._collections.map(_ => {
+        if(_.id === cid){
+          return {
+            ..._,
+            groups: _groups,
+            items: _items
+          }
         }
-      }
-      return _;
-    })
+        return _;
+      })
+    }
 
     this._update();
   }

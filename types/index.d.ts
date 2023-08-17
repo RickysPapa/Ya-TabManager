@@ -1,5 +1,5 @@
 import type { IWindow } from "~lib/new/WindowManager";
-import type { ICollectionItem } from "~lib/new/CollectionManager";
+import type { ICollection, ICollectionItem } from "~lib/new/CollectionManager";
 export {};
 declare global{
   interface ManagerState{
@@ -7,6 +7,8 @@ declare global{
     windowList: chrome.windows.Window[];
     savedSessionList: any[];
     readLaterList: any[],
+
+    collections: ICollection[],
 
     currentList: ICollectionItem[],
     // curSessionTabs: chrome.tabs.Tab[];  // all tabs in current session

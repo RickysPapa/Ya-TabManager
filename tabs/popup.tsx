@@ -69,6 +69,7 @@ const IndexPopup = () => {
     windowsClosed: [],
 
     collections: [],
+    readLater: [],
 
     currentListType: '',
     curSessionIndex: 0,
@@ -123,9 +124,10 @@ const IndexPopup = () => {
     // });
 
     await CollectionManager.init({
-      onUpdate: ({ collections }) => {
+      onUpdate: ({ collections, readLater }) => {
         setState({
-          collections
+          collections,
+          readLater
         })
       }
     });
@@ -156,6 +158,7 @@ const IndexPopup = () => {
     // session: $sessions,
     WINDOW: state.windows,
     COLLECTION: state.collections,
+    READ_LATER: state.readLater
     // readLater: $readLater
   }
 
@@ -422,6 +425,7 @@ const IndexPopup = () => {
   const saveToSession = ({id = '', name = ''} = {}, { close = false } = {}) => {
     const _tabs = getSelectedTabs();
     if(id){
+      console.log();
       CollectionManager.insertItem(_tabs.map(extractItemData), { cid: id })
       // DIR_LIST['session'].addTabs(id, _tabs.map(simplify));
     }else{
@@ -526,14 +530,22 @@ const IndexPopup = () => {
   console.log('render >>', Date.now() - _startTime, curShownTabs);
   // return (<div>111</div>);
 
-  const switchList = useCallback((sType, targetIndex: number) => {
-    if(sType === 'COLLECTION'){
+  const switchList = useCallback((sType, targetIndex: number = 0) => {
+    if(sType === 'COLLECTION') {
       const _tIndex = state.collections.length > targetIndex ? targetIndex : 0;
       const _dir = state.collections[_tIndex];
       CollectionManager.ensureCollectionData(_dir.id).then(() => {
         setState({
           curSessionType: sType,
           curSessionIndex: _tIndex,
+        })
+      })
+    }else if(sType === 'READ_LATER'){
+      CollectionManager.ensureCollectionData('readLater').then(() => {
+        console.log('???????ensureCollectionData');
+        setState({
+          curSessionType: sType,
+          curSessionIndex: 0,
         })
       })
     }else{
@@ -602,7 +614,7 @@ const IndexPopup = () => {
             </ul>
           </div>
           <div className="section">
-            <p className="title" onClick={() =>{ setState({ curSessionType: 'READ_LATER', curSessionId: 'default'}) }} >Read Later</p>
+            <p className="title pointer" onClick={switchList.bind(null, 'READ_LATER')} >Read Later</p>
           </div>
           <div className="section">
             <p className="title">收藏夹</p>
@@ -624,13 +636,13 @@ const IndexPopup = () => {
             <button onClick={() => {setState({showDuplicateTabs: true})}} >Delete duplicate tabs</button>
             {!TabSelect.noneSelected ? (
               <>
-                {state.curSessionType !== 'readLater' ? (
+                {state.curSessionType !== 'READ_LATER' ? (
                   <>
                     <button onClick={() => saveToReadLater()} >Read Later</button>
                     <button onClick={() => saveToReadLater(true)} >Read Later & Close</button>
                   </>
                 ) : null}
-                {state.curSessionType === 'window'? (
+                {state.curSessionType === 'WINDOW'? (
                   <>
                     <button onClick={toggleModelShow} >Save To Session</button>
                     <button onClick={toggleModelShow} >Save To Session & Close</button>
@@ -645,9 +657,9 @@ const IndexPopup = () => {
                 )}
               </>
             ) : null}
-            {state.curSessionType === 'session' ? (
-              <button onClick={() => openSession()} >Open Session</button>
-            ) : null}
+            {/*{state.curSessionType === 'COLLECTION' ? (*/}
+            {/*  <button onClick={() => openSession()} >Open Session</button>*/}
+            {/*) : null}*/}
             <button onClick={lookLocalStorage} >Storage Info</button>
           </div>
 
@@ -781,9 +793,9 @@ const IndexPopup = () => {
               placeholder="创建新的收藏夹"
               defaultValue=""
               // style={{ width: 120 }}
-              options={[{label: '新建收藏夹', value: ''}].concat($sessions.list.map(_session => ({
-                label: _session?.name || '未命名',
-                value: _session.id
+              options={[{label: '新建收藏夹', value: ''}].concat(state.collections.map(_ => ({
+                label: _.name || '未命名',
+                value: _.id
               })))}
             />
           </Form.Item>
