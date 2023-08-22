@@ -62,6 +62,11 @@ chrome.windows.getAll({populate: true}).then((_w) => {
   currentWindowWithDetail = _w;
 });
 
+
+const sendMessage = (type, data) => {
+  chrome.runtime.sendMessage({ type, data})
+}
+
 const IndexPopup = () => {
   const [state, setState] = useSetState<ManagerState>({
     // Total Data
@@ -482,16 +487,13 @@ const IndexPopup = () => {
   }
 
   // function openTabs({tabs: SessinonTab[] = [], newWindow: boolean = false} = {}){
-  function openTabs({tabs = null, newWindow = false, active = false} = {}) {
+  function openTabs({ originWindowInfo = {}, tabs = null, newWindow = false, active = false} = {}) {
     const _tabs = tabs ? tabs : getSelectedTabs();
     if(_tabs){
       if(newWindow){
         let _targetWindowId = null;
         function _onUpdated(_tabId, changeInfo, tab){
-          console.log('popup _onUpdated >>>');
           if(changeInfo.title && _targetWindowId && tab.windowId === _targetWindowId && tab.index !== 0){
-            console.log('popup _onUpdated >>> discard' + _tabId);
-            // console.log(JSON.stringify(changeInfo));
             chrome.tabs.discard(_tabId);
           }
         }
@@ -501,6 +503,12 @@ const IndexPopup = () => {
           url: _tabs.map(_ => _.url)
         }).then((_window) => {
           _targetWindowId = _window.id;
+          if(originWindowInfo){
+            WindowManager.updateWindowInfo(_targetWindowId, {
+              name: originWindowInfo.name
+            })
+            WindowManager.removeWindow(originWindowInfo.id);
+          }
           TabManager.moveClosedTabs(_tabs?.[0]?.windowId, _targetWindowId);
           setTimeout(() => {
             chrome.tabs.onUpdated.removeListener(_onUpdated);
@@ -601,13 +609,16 @@ const IndexPopup = () => {
                   onClick={switchList.bind(null, 'WINDOW', wIndex)}
                   onDoubleClick={() => {
                     if(item.closed){
-                      openTabs({ tabs: item.tabs, newWindow: true});
-                      WindowManager.removeWindow(item.id);
+                      sendMessage('OPEN_WINDOW', { wId: item.id })
                     }
                   }}
                   remove={() => WindowManager.removeWindow(item.id)}
                   updateInfo={(data) => {
-                    WindowManager.updateWindowInfo(item.id, data)
+                    sendMessage('UPDATE_WINDOW_INFO', {
+                      wId: item.id,
+                      info: data
+                    })
+                    // WindowManager.updateWindowInfo(item.id, data)
                   }}
                 />
               })}
@@ -788,11 +799,9 @@ const IndexPopup = () => {
             console.log(changedValues, allValues);
           }}
         >
-          <Form.Item label="选择收藏夹" name="id">
+          <Form.Item label="选择收藏夹" name="id" initialValue="" >
             <Select
               placeholder="创建新的收藏夹"
-              defaultValue=""
-              // style={{ width: 120 }}
               options={[{label: '新建收藏夹', value: ''}].concat(state.collections.map(_ => ({
                 label: _.name || '未命名',
                 value: _.id

@@ -11,6 +11,11 @@ import TabManager from "~lib/new/TabManager";
 
 export {}
 
+
+const log = (...args) => {
+  console.log('$$BG >>', ...args);
+}
+
 // console.log(
 //   "Live now; make now always the most precious time. Now will never come again.12995" + Date.now()
 // )
@@ -30,6 +35,81 @@ WindowManager.init({ isWorker: true });
 })();
 
 // TODO 第一次使用插件时需要初始化记录所有已打开的页面 or 重新启用插件要重新检查记录漏掉的页面
+
+
+// chrome.runtime.onConnect.addListener(function(port) {
+//   console.assert(port.name === "popup");
+//   port.onMessage.addListener(function({ type, data }) {
+//     if (type === 'reopenWindow'){
+//       console.log('reopen Window');
+//     }
+//   });
+// });
+
+
+function openWindow(winId, options: { newWindow?: boolean, tabs?: any[] } = { newWindow: false }){
+  let winInfo = null;
+  if(winId){
+    winInfo = WindowManager.getWindowInfo(winId);
+  }else if(options?.tabs?.length){
+    winInfo = { tabs: options.tabs };
+  }else{
+    return;
+  }
+
+  chrome.windows.create({
+    url: winInfo.tabs.map(_ => _.url)
+  }).then((_window) => {
+    const _targetWindowId = _window.id;
+    const _autoDiscard = (_tabId, changeInfo, tab) => {
+      if(changeInfo.title && _targetWindowId && tab.windowId === _targetWindowId && tab.index !== 0){
+        chrome.tabs.discard(_tabId);
+      }
+    }
+    chrome.tabs.onUpdated.addListener(_autoDiscard);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(_autoDiscard);
+    }, 3000)
+
+    log('openWindow', winInfo);
+    if(winInfo.name){
+      WindowManager.updateWindowInfo(_targetWindowId, {
+        name: winInfo.name
+      })
+    }
+    if(winId){
+      WindowManager.removeWindow(winId);
+      TabManager.moveClosedTabs(winId, _targetWindowId);
+    }
+  });
+}
+
+function openTabs(tabs, options = { newWindow: false }){
+  const onlyOne = tabs.length === 1;
+  if(options.newWindow){
+    Promise.all(tabs.map(_ => chrome.tabs.create({ active: onlyOne, url: _.url })));
+  }else{
+    openWindow(null, { tabs })
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // console.log('sender', JSON.stringify(sender));
+  // console.log('message', JSON.stringify(message));
+  // sendResponse('hello');
+
+  const { type, data } = message;
+  if(type === 'OPEN_WINDOW'){
+    if(!data?.wId) return;
+    console.log('$bg onMessage >>', type, data);
+    openWindow(data.wId);
+  }else if(type === 'OPEN_TABS') {
+    openTabs(data.tabs, { newWindow: data.newWindow });
+  }else if(type === 'UPDATE_WINDOW_INFO') {
+    if(!data?.wId) return;
+    WindowManager.updateWindowInfo(data.wId, data.info);
+  }
+});
 
 
 const createdMap = {};

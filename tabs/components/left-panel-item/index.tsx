@@ -25,8 +25,17 @@ export default function LeftPanelItem({ data, onClick = NOOP, onDoubleClick = NO
   const {id, createAt, name, closed} = data;
   const [alias, setAlias] = useState(name);
   const [editing, { setTrue, setFalse }] = useBoolean(false);
+
+  useEffect(() => {
+    setAlias(name);
+  }, [name])
+
   return (
-    <li key={id} className="window-item" onClick={onClick}>
+    <li
+      key={id}
+      className="window-item"
+      onClick={onClick}
+      onDoubleClick={onDoubleClick} >
       {closed === true
         ? (<span className="item-status item-status-closed" />)
         : (<span className="item-status item-status-opening" />)
@@ -52,7 +61,6 @@ export default function LeftPanelItem({ data, onClick = NOOP, onDoubleClick = NO
       ) : (
         <span
           style={{ fontWeight: active ? 'bold' : 'normal' }}
-          onDoubleClick={onDoubleClick}
         >{alias || dayjs(createAt).format('YYYY/MM/DD HH:mm') || id}</span>
       )}
       <div className="window-item-options" >

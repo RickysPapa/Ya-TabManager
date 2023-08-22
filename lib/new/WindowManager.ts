@@ -121,6 +121,8 @@ class WindowManager {
     // 前台：前台修改别名后更新缓存，用户直接关闭浏览器窗口需要保留别名信息
     StorageListener.listen<IWindowsInfo>(CACHE_WINDOWS_EXT_INFO, (newValue) => {
       this._extInfo = newValue;
+      console.log('$$WindowManager >>', 'CACHE_WINDOWS_EXT_INFO', newValue);
+      this._update();
     });
 
     /**
@@ -131,7 +133,6 @@ class WindowManager {
       this._updateExtInfo(win.id, {
         createAt: Date.now(),
         // name: dayjs().format('YYYY/MM/DD HH:mm'),
-        name: ''
       });
     };
 
@@ -160,6 +161,14 @@ class WindowManager {
     ], () => {
       this.updateData();
     });
+  }
+
+  /**
+   * 获取窗口信息
+   * @param wId
+   */
+  getWindowInfo(wId: number){
+    return this._closed.find(_ => _.id === wId) || { ...(this._lasted[wId] || {}), ...(this._extInfo[wId] || {})} || {};
   }
 
   /**
@@ -197,7 +206,7 @@ class WindowManager {
       // const extInfo = await localGet(CACHE_WINDOWS_EXT_INFO);
       // const latestExtInfo = Object.assign({}, this._extInfo)
       // latestExtInfo[wid] = { ...latestExtInfo[wid], ...data }
-      console.log('_updateExtInfo[0] >>', this._extInfo);
+      console.log('_updateExtInfo[0] >>', this._extInfo[wid]);
       this._update();
       await localSet({[CACHE_WINDOWS_EXT_INFO]: this._extInfo})
     }
@@ -225,13 +234,13 @@ class WindowManager {
     if(!windows){
       windows = this._current;
     }
-    console.log('WindowManager _update >>');
     this._current = windows.map((_) => {
       return {
         ..._,
         ...(this._extInfo[_.id] || {})
       };
     })
+    console.log('$$WindowManager _update >>', this._current);
     this.onUpdate && this.onUpdate({current: this._current.concat(this._closed)});
   }
 }

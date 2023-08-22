@@ -40,6 +40,6 @@ The easiest way to deploy your Plasmo extension is to use the built-in [bpp](htt
 - [ ] chrome 分组变为 Session 的子分组，和标签隔离
 
 ## ~~功能列表~~
-- [ ] 记录打开/关闭历史
+- [x] 记录打开/关闭历史
 - [ ] 能收藏 + 标签
 - [ ] 全局搜索
