@@ -193,9 +193,9 @@ const IndexPopup = () => {
 
   useEffect(() => {
     if(curSessionType === 'WINDOW' && curDir?.id){
-      console.log('999999', curDir);
+      // console.log('999999', curDir);
       TabManager.getClosedTabs(curDir.id, (docs) => {
-        console.log('9999999', docs);
+        // console.log('9999999', docs);
         setState({
           recentClosed: docs
         })
@@ -389,7 +389,14 @@ const IndexPopup = () => {
 
 
   const closeTabs = () => {
-    chrome.tabs.remove(TabSelect.selected as number[]);
+    if(curSessionType === 'WINDOW'){
+      if(curDir.closed){
+        WindowManager.removeClosedWindowTabs(curDir.id, TabSelect.selected as number[]);
+        TabManager.bulkClose(TabSelect.selected as number[]);
+      }else{
+        chrome.tabs.remove(TabSelect.selected as number[]);
+      }
+    }
     TabSelect.selected.forEach((_) => {
       removedMapApi.set(_, true)
     })
@@ -535,8 +542,7 @@ const IndexPopup = () => {
 
   // console.log('history', ClosedTabStorage.ts, ClosedTabStorage.getList(curSessionId), ClosedTabStorage.kv);
   // console.log('chrome.window.render >>>>', currentWindowWithDetail);
-  console.log('render >>', Date.now() - _startTime, curShownTabs);
-  // return (<div>111</div>);
+  // console.log('render >>', Date.now() - _startTime, curShownTabs);
 
   const switchList = useCallback((sType, targetIndex: number = 0) => {
     if(sType === 'COLLECTION') {
@@ -550,7 +556,6 @@ const IndexPopup = () => {
       })
     }else if(sType === 'READ_LATER'){
       CollectionManager.ensureCollectionData('readLater').then(() => {
-        console.log('???????ensureCollectionData');
         setState({
           curSessionType: sType,
           curSessionIndex: 0,
@@ -590,10 +595,6 @@ const IndexPopup = () => {
             url: `chrome-extension://${chrome.runtime.id}/tabs/popup.html`
           })
         }}>OpenInWindow</button>
-      </div>
-
-      <div>
-        {/*{JSON.stringify(state.windows)}*/}
       </div>
 
       <div className="main">

@@ -3,6 +3,9 @@ import EventListener from "~lib/EventListener";
 // import debounce from 'lodash/debounce';
 // import { localGet, localSet } from "~/lib/utils";
 
+const log = (...args) => {
+  console.log.apply(null, ['[TabManager]'].concat(args));
+}
 
 
 export function simplify(tab: chrome.tabs.Tab): ITab{
@@ -65,6 +68,28 @@ class TabManager{
     }
   }
 
+  async close(){
+
+  }
+
+  async bulkClose(ids: number[]){
+    if(Array.isArray(ids) && ids.length){
+      log('bulkClose', ids);
+      await this.__RxDB.tab_history.find({
+        selector: {
+          id: {
+            $in: ids.map(_ => _.toString())
+          }
+        }
+      }).update({
+        $set: {
+          status: 1
+        }
+      }).then(() => this.getClosedTabs());
+    }
+  }
+
+
   __closedWId = -1;
   __closedSubscriber = null;
   getClosedTabs(wId: number = 0, callback?: Function){
@@ -73,7 +98,12 @@ class TabManager{
     }
 
     this.__closedWId = wId || this.__closedWId;
-    this.__closedSubscriber = callback || this.__closedSubscriber;
+    if(callback){
+      this.__closedSubscriber = (...args) => {
+        const newFunc = (callback || function(){}).bind(this, ...args);
+        setTimeout(newFunc, 300);
+      }
+    }
 
     const query = this.__tabHistory.find({
       selector: {
@@ -88,15 +118,16 @@ class TabManager{
     // this.__tabHistory._queryCache._map.clear();
 
     if(this.__closedSubscriber){
-      if(wId){
-        // 当传入 wId 时则是用户点击触发的回调，无需延时
-        query.exec().then(this.__closedSubscriber);
-      }else{
-        // 增加延迟主要是因为 worker 更新 idb 是异步的，过早获取数据会拿不到
-        setTimeout(() => {
-          query.exec().then(this.__closedSubscriber);
-        }, 300)
-      }
+      query.exec().then(this.__closedSubscriber);
+      // if(wId){
+      //   // 当传入 wId 时则是用户点击触发的回调，无需延时
+      //   query.exec().then(this.__closedSubscriber);
+      // }else{
+      //   // 增加延迟主要是因为 worker 更新 idb 是异步的，过早获取数据会拿不到
+      //   setTimeout(() => {
+      //     query.exec().then(this.__closedSubscriber);
+      //   }, 300)
+      // }
     }
   }
 
@@ -111,7 +142,7 @@ class TabManager{
       $set: {
         wId: toWId
       }
-    });
+    })//.then(this.__closedSubscriber);
   }
 }
 

@@ -2,7 +2,7 @@ import StorageListener from '../StorageListener';
 import EventListener from '../EventListener';
 import { useBaseIdAndTimeStamp } from "~lib/utils";
 import { localSet, localGet, addChromeListen } from '~/lib/utils';
-import { throttle, findIndex } from 'lodash';
+import { throttle, findIndex, find } from 'lodash';
 import dayjs from 'dayjs';
 import TMWindow from "~lib/TMWindow";
 import Tab from "~lib/TMTab";
@@ -193,6 +193,15 @@ class WindowManager {
     }
   }
 
+  removeClosedWindowTabs(wid: number, tabs: number[]){
+    const winInfo = find(this._closed, ['id', wid]);
+    if(winInfo && winInfo?.tabs?.length){
+      this._upsertClosed(wid, {
+        tabs: winInfo.tabs.filter(_ => !tabs.includes(_.id))
+      })
+    }
+  }
+
   async _updateExtInfo(wid: number, data: IWindowInfo){
     const isClosedWindow = findIndex(this._closed, ['id', wid]) > -1;
     // const isRunningWindow = findIndex(this._current, ['id', wid]) > -1;
@@ -212,7 +221,7 @@ class WindowManager {
     }
   }
 
-  async _upsertClosed(wid, data?: IWindowInfo | IWindow){
+  async _upsertClosed(wid, data?: Partial<IWindow>){
     // 因为前台和后台都会尽快更新历史（手动修改名称 | 关闭窗口自动触发）
     // 所以这里保持从缓存中获取最新值，这个方法调用频率不高
     // this._closed = await localGet(CACHE_WINDOWS_CLOSED);

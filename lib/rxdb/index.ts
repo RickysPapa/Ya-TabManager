@@ -94,30 +94,23 @@ class RxDB {
     }, false);
 
     db.tab_history.preInsert(function(plainData){
-      console.log('tab_history preInsert1 >>');
       const ts = Date.now()
       plainData.up = ts;
       plainData.cr = ts;
-      // plainData.cr = 1691682282585;
       console.log('tab_history preInsert plainData >>', plainData);
     }, false);
 
     db.tab_history.preSave(function(plainData, rxDocument){
-      // console.log('tab_history preSave2 >>');
-      // console.log('tab_history preSave cr2 >>', rxDocument, plainData);
-      const compareKey = ['icon', 'title', 'url', 'wId', 'position'];
-      // 有更新使用最新的 up 值
+      const compareKey = ['icon', 'title', 'url', 'wId', 'position', 'status'];
       if(JSON.stringify(plainData, compareKey) !== JSON.stringify(rxDocument, compareKey)){
-        plainData.cr = rxDocument.cr;
+        // 有更新使用最新的 up 值
+        plainData.up = Date.now();
       }else{
         // 无更新使用旧值
         plainData.cr = rxDocument.cr;
         plainData.up = rxDocument.up;
       }
-      // console.log('tab_history preSave plainData >>', plainData);
-      // plainData.cr
-      // modify anyField before saving
-      // plainData.anyField = 'anyValue';
+      console.log('tab_history preSave >>', rxDocument, plainData);
     }, false);
 
     this.__instance = db;

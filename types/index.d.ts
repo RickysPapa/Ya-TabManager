@@ -36,12 +36,9 @@ declare global{
     url: string;
     cr: number;
     up: number;
-    isClosed?: number;
+    // isClosed?: number;
     status: number;
   }
-
-
-
 }
 
 
