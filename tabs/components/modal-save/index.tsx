@@ -6,27 +6,36 @@ import Select from "antd/es/select";
 import Input from "antd/es/input";
 import type { ICollection, ICollectionGroup } from "~lib/new/CollectionManager";
 
-interface IModalSaveProps {
-  open: boolean;
-  onSave: Function;
-  collections: ICollection[];
-  collectionGroups: ICollectionGroup[];
+interface IModalSaveFormData {
+  cid: string;
+  cgid: string;
+  cName: string;
+  cgName: string;
 }
 
-export default forwardRef(function ModalSave(props: IModalSaveProps) {
+interface IModalSaveProps {
+  open: boolean;
+  onSave: (formData: IModalSaveFormData) => void;
+  collections: ICollection[];
+  collectionGroups: ICollectionGroup[];
+  getCollectionGroup: (cid) => Promise<ICollectionGroup[]>
+}
+
+export default forwardRef(function ModalSave(props: IModalSaveProps, ref) {
   const {
     onSave,
     collections,
-    collectionGroups
+    getCollectionGroups,
   } = props;
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
+  const [collectionGroups, setCollectionGroups] = useState<ICollectionGroup[]>([]);
 
   const toggle = () => {
     setOpen(!open);
   }
 
-  useImperativeHandle(null, () => ({
+  useImperativeHandle(ref, () => ({
     toggle
   }))
 
@@ -39,6 +48,7 @@ export default forwardRef(function ModalSave(props: IModalSaveProps) {
         <Button key="save" type="primary" onClick={() => {
           const _formData = form.getFieldsValue(true);
           onSave && onSave(_formData);
+          toggle();
         }}> 保存 </Button>,
       ]}
     >
@@ -51,6 +61,12 @@ export default forwardRef(function ModalSave(props: IModalSaveProps) {
           console.log('Success:', values);
         }}
         onValuesChange={(changedValues, allValues) => {
+          if(changedValues.cid){
+            getCollectionGroups(changedValues.cid).then((arr) => {
+              setCollectionGroups(arr);
+            });
+          }
+
           console.log(changedValues, allValues);
         }}
       >
@@ -65,17 +81,18 @@ export default forwardRef(function ModalSave(props: IModalSaveProps) {
         </Form.Item>
         <Form.Item
           noStyle
-          shouldUpdate={(prevValues, currentValues) => prevValues.id !== currentValues.id}
+          shouldUpdate={(prevValues, currentValues) => prevValues.cid !== currentValues.cid}
         >
           {({ getFieldValue }) =>
-            !getFieldValue('id') ? (
-              <Form.Item name="name" label="收藏夹名称">
+            !getFieldValue('cid') ? (
+              <Form.Item name="cName" label="收藏夹名称">
                 <Input />
               </Form.Item>
             ) : null
           }
         </Form.Item>
 
+        {/* TODO 实时获取最新的分组信息？如果创建了新的分组会不会不同步到 background 产生错误？ */}
         <Form.Item label="选择分组" name="cgid" initialValue="" >
           <Select
             placeholder="创建分组"
@@ -84,6 +101,18 @@ export default forwardRef(function ModalSave(props: IModalSaveProps) {
               value: _.id
             })))}
           />
+        </Form.Item>
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) => prevValues.cgid !== currentValues.cgid}
+        >
+          {({ getFieldValue }) =>
+            !getFieldValue('cgid') ? (
+              <Form.Item name="cgName" label="分组名称">
+                <Input />
+              </Form.Item>
+            ) : null
+          }
         </Form.Item>
       </Form>
     </Modal>

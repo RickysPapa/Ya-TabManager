@@ -1,3 +1,25 @@
+export const Logger = {
+  log(...args){
+    const hasSource = typeof args[0] === 'string' ? args[0] : '';
+    console.log(`%c[Logger] ${hasSource ?? args[0]} >>`, 'color: #90ee90;font-weight: bold;', ...args.slice(hasSource ?? 1));
+  },
+  error(...args){
+    const hasSource = typeof args[0] === 'string' ? args[0] : '';
+    console.log(`%c[Logger] ${hasSource ?? args[0]} >>`, 'color: #ff211c;font-weight: bold;', ...args.slice(hasSource ?? 1));
+  }
+}
+
+Array.prototype.toMap = function (key: string) {
+  return this.reduce<Record<string, any>>((acc, cur) => {
+    if(cur[key]){
+      acc[cur[key]] = cur;
+    }else{
+      Logger.error('Array.prototype.toMap', 'key is missing');
+    }
+    return acc;
+  }, {});
+}
+
 export const NOOP = () => {};
 
 /**
@@ -18,7 +40,7 @@ export const uid = () => {
 }
 
 /**
- * 参数转换
+ * 转换成数组
  * @param key
  */
 const str2Arr = (key: string | string[]): string[] => {

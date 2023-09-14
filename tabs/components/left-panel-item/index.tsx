@@ -15,9 +15,20 @@ interface ILeftPanelItemProps {
   onDoubleClick?: MouseEventHandler;
   updateInfo?: Function;
   remove?: MouseEventHandler;
+  showStatus?: boolean;
 }
 
-export default function LeftPanelItem({ data, onClick = NOOP, onDoubleClick = NOOP, updateInfo = NOOP, remove = NOOP, active = false }: ILeftPanelItemProps){
+export default function LeftPanelItem(props: ILeftPanelItemProps){
+  const {
+    data,
+    onClick = NOOP,
+    onDoubleClick = NOOP,
+    updateInfo = NOOP,
+    remove = NOOP,
+    showStatus = false,
+    active = false
+  } = props;
+
   if(!data){
     console.log('LeftPanelItem >>', data);
     return null;
@@ -36,20 +47,15 @@ export default function LeftPanelItem({ data, onClick = NOOP, onDoubleClick = NO
       className="window-item"
       onClick={onClick}
       onDoubleClick={onDoubleClick} >
-      {closed === true
-        ? (<span className="item-status item-status-closed" />)
-        : (<span className="item-status item-status-opening" />)
-      }
+      {showStatus ? (<span className={`item-status item-status-${closed === true ? 'closed' : 'opening'}`} />) : null}
       {editing ? (
         <input
           value={alias}
           onInput={(e) => {
-            // console.log('onInput >>', e.currentTarget.value);
             setAlias(e.currentTarget.value);
           }}
           autoFocus
           onKeyDown={(e) => {
-            // console.log('onKeyDown >>', e.key);
             if(e.key === 'Enter'){
               setFalse();
               updateInfo({

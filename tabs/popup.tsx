@@ -1,54 +1,33 @@
-import { useEffect, useState, useMemo, useRef, DOMElement, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {DeleteOutlined, HistoryOutlined} from '@ant-design/icons';
-import EventEmitter from 'eventemitter3';
 import WindowManager from '~/lib/new/WindowManager'
 import TabManager from '~/lib/new/TabManager'
 import CollectionManager from '~/lib/new/CollectionManager'
 import LeftPanelItem from './components/left-panel-item';
-import type { IWindow } from '~/lib/new/WindowManager'
-import {db} from '../lib/db';
-// import ClosedTabStorage from '../lib/ClosedTabStorage';
-import StorageListener from '../lib/StorageListener';
 import debounce from 'lodash/debounce';
-// import { useSetState, useToggle, useMap, useSelections } from 'ahooks';
-// import {Modal, Form, Input, Upload } from 'antd';
-
 import useSetState from 'ahooks/es/useSetState';
 import { useAsyncEffect } from 'ahooks';
 import useToggle from 'ahooks/es/useToggle';
 import useMap from 'ahooks/es/useMap';
 import useSelections from 'ahooks/es/useSelections';
-import useKeyPress from 'ahooks/es/useKeyPress';
 import Modal from 'antd/es/modal';
 import Form from 'antd/es/form';
 import Input from 'antd/es/input';
 import Select from 'antd/es/select';
 import Button from 'antd/es/button';
 import Upload from 'antd/es/upload';
-// import Result from 'antd/es/result';
-import { useBaseIdAndTimeStamp, lookLocalStorage, localGet } from "~lib/utils";
+import { useBaseIdAndTimeStamp, lookLocalStorage, localGet, Logger } from "~lib/utils";
 import './popup.less';
-// import { InboxOutlined } from '@ant-design/icons';
 import { useSessionList } from "~lib/hooks";
 import TMSearch from './components/search';
-import { simplify } from "~lib/TMTab";
-// import dayjs from "dayjs";
+import ModalSave from './components/modal-save';
+import modalSave from "./components/modal-save";
 
-const EE = new EventEmitter()
-
-let test = 1;
 const { Dragger } = Upload;
-const SESSION_TYPE_LIST = {
-  session: 'savedSessionList',
-  window: 'windowList',
-  readLater: 'readLaterList'
-}
 
 const extractItemData = ({ title, url, favIconUrl }) => ({
   title, url, icon: favIconUrl
 })
-
-
 
 const STORAGE_KEY = {
   session: '$session',
@@ -61,6 +40,13 @@ chrome.windows.getAll({populate: true}).then((_w) => {
   console.log('chrome.windows.getAll >>', Date.now() - _startTime, _w);
   currentWindowWithDetail = _w;
 });
+
+let allTabGroups = {};
+chrome.tabGroups.query({}).then((tabGroups) => {
+  allTabGroups = tabGroups.toMap('id');
+  Logger.log('chrome.tabGroups', tabGroups, allTabGroups);
+})
+
 
 
 const sendMessage = (type, data) => {
@@ -91,14 +77,11 @@ const IndexPopup = () => {
     showDuplicateTabs: false,
     showSearchResult: false,
     searchResult: [],
-    // curTabs: [],
-    // curShownTabs: [],
-    // For User-Action
-    // tabSelected: [],
     recentClosed: [],
-    // domainList: null,
     curDomain: '',
   });
+
+  const ModalSaveRef = useRef(null);
 
   const {curSessionType, curSessionId, curSessionIndex} = state;
   const [form] = Form.useForm();
@@ -144,44 +127,32 @@ const IndexPopup = () => {
 
 
   // const $windows = useSessionList({chromeStorageKey: '$window'});
-  const $windows = useSessionList<ChromeTab>({initialData: currentWindowWithDetail});
-  const $sessions = useSessionList<YATab>({chromeStorageKey: '$session'});
-  const $readLater = useSessionList<YATab>({chromeStorageKey: '$readLater', initialData: [{
-    id: 'default',
-    tabs: []
-  }]});
-  const $windowsRef = useRef($windows);
-  $windowsRef.current = $windows;
-
-  // console.log('state.windowList', state.windowList);
-  // console.log('$sessions >>', $sessions);
-  // console.log('$windows >>', $windows);
-  // console.log('state.closeTabs >>', state.recentClosed);
-  // console.log('$readLater >>', $readLater);
+  // const $windows = useSessionList<ChromeTab>({initialData: currentWindowWithDetail});
+  // const $sessions = useSessionList<YATab>({chromeStorageKey: '$session'});
+  // const $readLater = useSessionList<YATab>({chromeStorageKey: '$readLater', initialData: [{
+  //   id: 'default',
+  //   tabs: []
+  // }]});
+  // const $windowsRef = useRef($windows);
+  // $windowsRef.current = $windows;
 
   const DIR_LIST = {
-    // session: $sessions,
     WINDOW: state.windows,
     COLLECTION: state.collections,
     READ_LATER: state.readLater
-    // readLater: $readLater
   }
 
-  // useEffect(() => {
-    // EE.once('global-data-ready', currentWindowWithDetail);
-  // })
-
-  const {windowSearchSource, windowSearchSourceData} = useMemo(() => {
-    return $windows.list.reduce((acc, cur) => {
-      console.log('windowSearchSource > ', cur.tabs);
-      acc.windowSearchSource = acc.windowSearchSource.concat(cur.tabs.map(_ => _.title + _.url + ''))
-      acc.windowSearchSourceData = acc.windowSearchSourceData.concat(cur.tabs)
-      return acc;
-    }, {
-      windowSearchSource: [],
-      windowSearchSourceData: []
-    })
-  }, [$windows.list])
+  // const {windowSearchSource, windowSearchSourceData} = useMemo(() => {
+  //   return $windows.list.reduce((acc, cur) => {
+  //     console.log('windowSearchSource > ', cur.tabs);
+  //     acc.windowSearchSource = acc.windowSearchSource.concat(cur.tabs.map(_ => _.title + _.url + ''))
+  //     acc.windowSearchSourceData = acc.windowSearchSourceData.concat(cur.tabs)
+  //     return acc;
+  //   }, {
+  //     windowSearchSource: [],
+  //     windowSearchSourceData: []
+  //   })
+  // }, [$windows.list])
 
   // 当前窗口数据
   const curDir = useMemo(() => {
@@ -213,7 +184,7 @@ const IndexPopup = () => {
       }
     }
     return (_curTabs || []).filter(_ => !removedMapApi.get(_.id));
-  }, [state.windows, state.curSessionType, curSessionIndex, removedMap, $windows.list])
+  }, [state.windows, state.curSessionType, curSessionIndex, removedMap])
 
 
   useEffect(() => {
@@ -328,50 +299,50 @@ const IndexPopup = () => {
 
 
   useEffect(() => {
-    console.log('didMount >>', Date.now());
+    // console.log('didMount >>', Date.now());
 
 
-    chrome.tabs.onCreated.addListener((tab) => {
-      // console.log('onCreated >>', tab);
-      $windowsRef.current.insertTab(tab.windowId, tab.index, tab);
-    })
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      // console.log('onUpdated >>', tabId, changeInfo, tab);
-      console.log('$trigger onRemoved');
-      if(changeInfo.status !== 'complete'){
-        $windowsRef.current.updateTab(tab.windowId, tab);
-      }
-    })
-    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-      // console.log('onRemoved >>', tabId, removeInfo);
-      $windowsRef.current.removeTab(removeInfo.windowId, tabId);
-    })
+    // chrome.tabs.onCreated.addListener((tab) => {
+    //   // console.log('onCreated >>', tab);
+    //   $windowsRef.current.insertTab(tab.windowId, tab.index, tab);
+    // })
+    // chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    //   // console.log('onUpdated >>', tabId, changeInfo, tab);
+    //   console.log('$trigger onRemoved');
+    //   if(changeInfo.status !== 'complete'){
+    //     $windowsRef.current.updateTab(tab.windowId, tab);
+    //   }
+    // })
+    // chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+    //   // console.log('onRemoved >>', tabId, removeInfo);
+    //   $windowsRef.current.removeTab(removeInfo.windowId, tabId);
+    // })
 
-    const resetWindow = (tabId, info) => {
-      console.log('$trigger resetWindow');
-      const wid = info.windowId || info.newWindowId || info.oldWindowId || info.id;
-      chrome.windows.get(wid, {populate: true}).then((_) => {
-        $windowsRef.current.resetTabs(wid, _.tabs);
-      });
-    }
+    // const resetWindow = (tabId, info) => {
+    //   console.log('$trigger resetWindow');
+    //   const wid = info.windowId || info.newWindowId || info.oldWindowId || info.id;
+    //   chrome.windows.get(wid, {populate: true}).then((_) => {
+    //     $windowsRef.current.resetTabs(wid, _.tabs);
+    //   });
+    // }
+    //
+    // chrome.tabs.onMoved.addListener(debounce(resetWindow, 500));
+    // chrome.tabs.onAttached.addListener(resetWindow)
+    // chrome.tabs.onDetached.addListener(resetWindow);
+    //
+    // chrome.windows.onCreated.addListener((_w) => {
+    //   console.log('windows.onCreated popup.ts >>', _w);
+    //   $windowsRef.current.createSession({name: '', tabs: [], ..._w});
+    // })
 
-    chrome.tabs.onMoved.addListener(debounce(resetWindow, 500));
-    chrome.tabs.onAttached.addListener(resetWindow)
-    chrome.tabs.onDetached.addListener(resetWindow);
-
-    chrome.windows.onCreated.addListener((_w) => {
-      console.log('windows.onCreated popup.ts >>', _w);
-      $windowsRef.current.createSession({name: '', tabs: [], ..._w});
-    })
-
-    try{
-      setTimeout(() => {
-        $sessions.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['session'])));
-        $readLater.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['readLater'])));
-      }, 150)
-    }catch (e){
-    }
-
+    // try{
+    //   setTimeout(() => {
+    //     $sessions.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['session'])));
+    //     $readLater.reset(JSON.parse(localStorage.getItem(STORAGE_KEY['readLater'])));
+    //   }, 150)
+    // }catch (e){
+    // }
+    //
     // StorageListener.listen('$closed', (newValue) => {
     //   console.log('storage.onChanged $closed >> ', newValue);
     //   setState({
@@ -434,31 +405,7 @@ const IndexPopup = () => {
     return _tabSelected;
   }
 
-  const saveToSession = ({id = '', name = ''} = {}, { close = false } = {}) => {
-    const _tabs = getSelectedTabs();
-    if(id){
-      console.log();
-      CollectionManager.insertItem(_tabs.map(extractItemData), { cid: id })
-      // DIR_LIST['session'].addTabs(id, _tabs.map(simplify));
-    }else{
-      CollectionManager.insertItem(_tabs.map(extractItemData), { cName: name })
-      // DIR_LIST['session'].createSession({name, tabs: _tabs.map(simplify)})
-    }
-    if(close){
-      closeTabs();
-    }else{
-      TabSelect.unSelectAll();
-    }
-  }
-
-  function _getCurSessionInstance(){
-    return DIR_LIST[curSessionType];
-  }
-
-  // function __getCurSessionTabs(){
-  //   return DIR_LIST[curSessionType].kv[curSessionId].tabs;
-  // }
-
+  // const saveToSession =
 
   function deleteSavedTab(){
     DIR_LIST[curSessionType].removeTabs(curSessionId, TabSelect.selected);
@@ -468,7 +415,6 @@ const IndexPopup = () => {
     TabSelect.unSelectAll();
   }
 
-
   function resetGroupByDomain() {
     setState({
       shouldGroupByDomain: false,
@@ -476,12 +422,12 @@ const IndexPopup = () => {
   }
 
   function exportData(){
-    const _data = {
-      sessions: $sessions.list,
-      readLater: $readLater.list
-    };
+    // const _data = {
+    //   sessions: $sessions.list,
+    //   readLater: $readLater.list
+    // };
 
-    const blob = new Blob([JSON.stringify(_data, null, 2)], {
+    const blob = new Blob([JSON.stringify('???', null, 2)], {
       type: "application/json",
     });
 
@@ -493,7 +439,6 @@ const IndexPopup = () => {
     });
   }
 
-  // function openTabs({tabs: SessinonTab[] = [], newWindow: boolean = false} = {}){
   function openTabs({ originWindowInfo = {}, tabs = null, newWindow = false, active = false} = {}) {
     const _tabs = tabs ? tabs : getSelectedTabs();
     if(_tabs){
@@ -533,16 +478,12 @@ const IndexPopup = () => {
     }
   }
 
-  function openSession(){
-    openTabs({
-      newWindow: true,
-      tabs: $sessions.getTabs(state.curSessionId),
-    })
-  }
-
-  // console.log('history', ClosedTabStorage.ts, ClosedTabStorage.getList(curSessionId), ClosedTabStorage.kv);
-  // console.log('chrome.window.render >>>>', currentWindowWithDetail);
-  // console.log('render >>', Date.now() - _startTime, curShownTabs);
+  // function openSession(){
+  //   openTabs({
+  //     newWindow: true,
+  //     tabs: $sessions.getTabs(state.curSessionId),
+  //   })
+  // }
 
   const switchList = useCallback((sType, targetIndex: number = 0) => {
     if(sType === 'COLLECTION') {
@@ -563,7 +504,6 @@ const IndexPopup = () => {
       })
     }else{
       const _tIndex = state.windows.length > targetIndex ? targetIndex : 0;
-      // const _dir = state.collections[_tId];
       setState({
         curSessionType: sType,
         curSessionIndex: _tIndex,
@@ -576,15 +516,15 @@ const IndexPopup = () => {
       <div>
         <span>Tab Manager From Ricky's Love ❤️</span>
         <DeleteOutlined />
-        <TMSearch
-          dataSource={windowSearchSourceData}
-          onResult={(res) => {
-            setState({
-              showSearchResult: res !== false,
-              searchResult: res || []
-            })
-          }}
-        />
+        {/*<TMSearch*/}
+        {/*  dataSource={windowSearchSourceData}*/}
+        {/*  onResult={(res) => {*/}
+        {/*    setState({*/}
+        {/*      showSearchResult: res !== false,*/}
+        {/*      searchResult: res || []*/}
+        {/*    })*/}
+        {/*  }}*/}
+        {/*/>*/}
         <button onClick={exportData} >Export</button>
         <button onClick={() => setUploadState({open: true})}>Import</button>
         <button onClick={() => {
@@ -604,9 +544,10 @@ const IndexPopup = () => {
             <ul className="list">
               {state.windows.map((item, wIndex) => {
                 return <LeftPanelItem
-                  active={wIndex === curSessionIndex}
+                  active={curSessionType === 'WINDOW' && wIndex === curSessionIndex}
                   key={item.id}
                   data={item}
+                  showStatus={true}
                   onClick={switchList.bind(null, 'WINDOW', wIndex)}
                   onDoubleClick={() => {
                     if(item.closed){
@@ -633,7 +574,7 @@ const IndexPopup = () => {
             <ul className="session-list">
               {state.collections.map(( collection, cIndex ) => {
                 return <LeftPanelItem
-                  active={cIndex === curSessionIndex}
+                  active={curSessionType === 'COLLECTION' && cIndex === curSessionIndex}
                   key={collection.id}
                   data={collection}
                   onClick={switchList.bind(null, 'COLLECTION', cIndex)}
@@ -656,8 +597,7 @@ const IndexPopup = () => {
                 ) : null}
                 {state.curSessionType === 'WINDOW'? (
                   <>
-                    <button onClick={toggleModelShow} >Save To Session</button>
-                    <button onClick={toggleModelShow} >Save To Session & Close</button>
+                    <button onClick={() => ModalSaveRef.current.toggle()} >Save To Session</button>
                     <button onClick={closeTabs} >Close</button>
                   </>
                 ) : (
@@ -735,7 +675,7 @@ const IndexPopup = () => {
                         openTabs({tabs: [tab], active: true});
                       }
                     }}>
-                      <img className="tab-favicon" src={tab.icon}/>
+                      <img className="tab-favicon" src={tab.favIconUrl || tab.icon}/>
                       <div className="tab-title-text" >{tab.title}</div>
                       <button></button>
                     </div>
@@ -769,6 +709,27 @@ const IndexPopup = () => {
         </div>
 
       </div>
+
+      <ModalSave
+        ref={ModalSaveRef}
+        open={modalShow}
+        collections={state.collections}
+        getCollectionGroups={(cid) => {
+          return CollectionManager.getGroups(cid);
+        }}
+        // collectionGroups={}
+        onSave={(data) => {
+          const _tabs = getSelectedTabs();
+          CollectionManager.insertItem(_tabs.map(extractItemData), data);
+          TabSelect.unSelectAll();
+          // if(close){
+          //   closeTabs();
+          // }else{
+          //   TabSelect.unSelectAll();
+          // }
+        }}
+      />
+
       <Modal
         title="保存到收藏"
         open={modalShow}
@@ -776,7 +737,6 @@ const IndexPopup = () => {
         footer={[
           <Button key="save" type="primary" onClick={() => {
             const _formData = form.getFieldsValue(true);
-            saveToSession(_formData);
             toggleModelShow();
           }}>
             保存
@@ -824,6 +784,7 @@ const IndexPopup = () => {
         </Form>
       </Modal>
 
+
       <Modal
         title="导入"
         open={uploadState.open}
@@ -847,8 +808,8 @@ const IndexPopup = () => {
                 console.log(info.file, info.fileList);
                 info.file.originFileObj.text().then(res => {
                   const _data = JSON.parse(res);
-                  $sessions.reset(_data.sessions);
-                  $readLater.reset(_data.readLater);
+                  // $sessions.reset(_data.sessions);
+                  // $readLater.reset(_data.readLater);
                   setUploadState({ success: true })
                   console.log(_data);
                 })

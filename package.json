@@ -45,7 +45,8 @@
       "sessions",
       "history",
       "storage",
-      "downloads"
+      "downloads",
+      "tabGroups"
     ]
   }
 }

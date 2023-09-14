@@ -35,11 +35,15 @@ The easiest way to deploy your Plasmo extension is to use the built-in [bpp](htt
 ## 结论
 1. 清空某个 Session 的 Tab 后，不会自动删除 session（考虑到用户可能还会在新增 Tab 进来）
 
-## TODO
-- [ ] 日志方案，复现问题使用
-- [ ] chrome 分组变为 Session 的子分组，和标签隔离
 
 ## ~~功能列表~~
 - [x] 记录打开/关闭历史
 - [ ] 能收藏 + 标签
 - [ ] 全局搜索
+
+## 其他
+- [ ] 日志方案，复现问题使用
+- [ ] chrome 分组变为 Session 的子分组，和标签隔离
+
+## bugfix
+- [ ] 长时间未使用浏览器，意外关闭，下次打开时需要判断显示上一次的意外关闭的窗口信息，不能直接使用实时数据
